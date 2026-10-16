@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #0d1117;
+    color: #f0f6fc;
+    overflow-x: hidden;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Floating reaction animation */
+@keyframes floatUpFade {
+  0% {
+    opacity: 0;
+    transform: translateY(20px) scale(0.6);
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(-10px) scale(1.15);
+  }
+  80% {
+    opacity: 0.9;
+    transform: translateY(-90px) scale(1.05);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-140px) scale(0.8);
+  }
+}
+
+.animate-float-reaction {
+  animation: floatUpFade 2.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Speaking pulse ring */
+@keyframes speakingPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.8), 0 0 15px rgba(16, 185, 129, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 1), 0 0 25px rgba(16, 185, 129, 0.6);
+  }
+}
+
+.speaking-active {
+  animation: speakingPulse 1.5s infinite ease-in-out;
+}

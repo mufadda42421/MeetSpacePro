@@ -1,0 +1,159 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global hardened helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Entity validation helpers
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['uid', 'displayName', 'photoURL', 'createdAt', 'updatedAt']) &&
+             data.uid is string && data.uid.size() <= 128 && data.uid == request.auth.uid &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100 &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 500)) &&
+             data.createdAt is string && data.updatedAt is string;
+    }
+
+    function isValidUserPreferences(data) {
+      return data.keys().hasAll(['uid', 'theme', 'updatedAt']) &&
+             data.keys().hasOnly(['uid', 'email', 'theme', 'mirrorVideo', 'noiseSuppression', 'captionsEnabled', 'updatedAt']) &&
+             data.uid is string && data.uid.size() <= 128 && data.uid == request.auth.uid &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 200)) &&
+             data.theme in ['dark', 'light', 'system'] &&
+             (!('mirrorVideo' in data) || data.mirrorVideo is bool) &&
+             (!('noiseSuppression' in data) || data.noiseSuppression is bool) &&
+             (!('captionsEnabled' in data) || data.captionsEnabled is bool) &&
+             data.updatedAt is string;
+    }
+
+    function isValidMeeting(data) {
+      return data.keys().hasAll(['meetingId', 'title', 'hostId', 'hostName', 'status', 'isLocked', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['meetingId', 'title', 'hostId', 'hostName', 'status', 'isLocked', 'waitingRoomEnabled', 'createdAt', 'updatedAt']) &&
+             data.meetingId is string && data.meetingId.size() <= 64 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 120 &&
+             data.hostId is string && data.hostId.size() <= 128 &&
+             data.hostName is string && data.hostName.size() <= 100 &&
+             data.status in ['active', 'ended', 'scheduled'] &&
+             data.isLocked is bool &&
+             (!('waitingRoomEnabled' in data) || data.waitingRoomEnabled is bool) &&
+             data.createdAt is string && data.updatedAt is string;
+    }
+
+    function isValidMeetingMessage(data) {
+      return data.keys().hasAll(['id', 'meetingId', 'senderId', 'senderName', 'text', 'createdAt']) &&
+             data.keys().hasOnly(['id', 'meetingId', 'senderId', 'senderName', 'senderPhoto', 'text', 'attachmentName', 'attachmentUrl', 'createdAt']) &&
+             data.id is string && data.id.size() <= 64 &&
+             data.meetingId is string && data.meetingId.size() <= 64 &&
+             data.senderId is string && data.senderId.size() <= 128 && data.senderId == request.auth.uid &&
+             data.senderName is string && data.senderName.size() <= 100 &&
+             data.text is string && data.text.size() <= 2000 &&
+             (!('senderPhoto' in data) || (data.senderPhoto is string && data.senderPhoto.size() <= 500)) &&
+             (!('attachmentName' in data) || (data.attachmentName is string && data.attachmentName.size() <= 200)) &&
+             (!('attachmentUrl' in data) || (data.attachmentUrl is string && data.attachmentUrl.size() <= 1000)) &&
+             data.createdAt is string;
+    }
+
+    function isValidScheduledMeeting(data) {
+      return data.keys().hasAll(['id', 'meetingCode', 'title', 'startTime', 'durationMinutes', 'hostId', 'createdAt']) &&
+             data.keys().hasOnly(['id', 'meetingCode', 'title', 'description', 'startTime', 'durationMinutes', 'hostId', 'hostEmail', 'createdAt']) &&
+             data.id is string && data.id.size() <= 64 &&
+             data.meetingCode is string && data.meetingCode.size() <= 64 &&
+             data.title is string && data.title.size() <= 120 &&
+             data.startTime is string &&
+             data.durationMinutes is number &&
+             data.hostId is string && data.hostId == request.auth.uid &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+             (!('hostEmail' in data) || (data.hostEmail is string && data.hostEmail.size() <= 200)) &&
+             data.createdAt is string;
+    }
+
+    function isValidContact(data) {
+      return data.keys().hasAll(['id', 'userId', 'contactEmail', 'contactName', 'createdAt']) &&
+             data.keys().hasOnly(['id', 'userId', 'contactEmail', 'contactName', 'createdAt']) &&
+             data.id is string && data.id.size() <= 64 &&
+             data.userId is string && data.userId == request.auth.uid &&
+             data.contactEmail is string && data.contactEmail.size() <= 200 &&
+             data.contactName is string && data.contactName.size() <= 100 &&
+             data.createdAt is string;
+    }
+
+    // Health / boot connection probe
+    match /test/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // User Public Profile
+    match /users/{userId}/public/profile {
+      allow get: if true;
+      allow list: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId && isValidUserProfile(incoming());
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    // User Private Preferences & Settings
+    match /users/{userId}/private/preferences {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow create, update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId && isValidUserPreferences(incoming());
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    // Meetings collection
+    match /meetings/{meetingId} {
+      allow get: if isSignedIn() && isValidId(meetingId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(meetingId) && incoming().hostId == request.auth.uid && isValidMeeting(incoming());
+      allow update: if isSignedIn() && isValidId(meetingId) && isValidMeeting(incoming()) && (
+        // Host action: update settings or end meeting
+        (existing().hostId == request.auth.uid && incoming().hostId == existing().hostId)
+      );
+      allow delete: if isSignedIn() && isValidId(meetingId) && existing().hostId == request.auth.uid;
+
+      // Subcollection: Meeting Chat Messages
+      match /messages/{messageId} {
+        allow get, list: if isSignedIn() && isValidId(meetingId);
+        allow create: if isSignedIn() && isValidId(meetingId) && isValidId(messageId) &&
+                         incoming().senderId == request.auth.uid && isValidMeetingMessage(incoming());
+        allow update: if false;
+        allow delete: if isSignedIn() && (existing().senderId == request.auth.uid || get(/databases/$(database)/documents/meetings/$(meetingId)).data.hostId == request.auth.uid);
+      }
+    }
+
+    // User Scheduled Meetings
+    match /users/{userId}/scheduledMeetings/{scheduleId} {
+      allow get, list: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow create, update: if isSignedIn() && isValidId(userId) && isValidId(scheduleId) &&
+                               request.auth.uid == userId && isValidScheduledMeeting(incoming());
+      allow delete: if isSignedIn() && isValidId(userId) && isValidId(scheduleId) && request.auth.uid == userId;
+    }
+
+    // User Contacts
+    match /users/{userId}/contacts/{contactId} {
+      allow get, list: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow create, update: if isSignedIn() && isValidId(userId) && isValidId(contactId) &&
+                               request.auth.uid == userId && isValidContact(incoming());
+      allow delete: if isSignedIn() && isValidId(userId) && isValidId(contactId) && request.auth.uid == userId;
+    }
+  }
+}

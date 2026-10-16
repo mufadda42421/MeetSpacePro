@@ -1,0 +1,122 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public profile of a MeetSpace user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "displayName", "createdAt", "updatedAt"]
+    },
+    "UserPreferences": {
+      "title": "UserPreferences",
+      "description": "Private user preferences and audio/video device options",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 200 },
+        "theme": { "type": "string", "enum": ["dark", "light", "system"] },
+        "mirrorVideo": { "type": "boolean" },
+        "noiseSuppression": { "type": "boolean" },
+        "captionsEnabled": { "type": "boolean" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["uid", "theme", "updatedAt"]
+    },
+    "Meeting": {
+      "title": "Meeting",
+      "description": "Meeting room instance configuration and security state",
+      "type": "object",
+      "properties": {
+        "meetingId": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "title": { "type": "string", "maxLength": 120 },
+        "hostId": { "type": "string", "maxLength": 128 },
+        "hostName": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["active", "ended", "scheduled"] },
+        "isLocked": { "type": "boolean" },
+        "waitingRoomEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["meetingId", "title", "hostId", "hostName", "status", "isLocked", "createdAt", "updatedAt"]
+    },
+    "MeetingMessage": {
+      "title": "MeetingMessage",
+      "description": "Chat message sent inside a meeting room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "meetingId": { "type": "string", "maxLength": 64 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "senderPhoto": { "type": "string", "maxLength": 500 },
+        "text": { "type": "string", "maxLength": 2000 },
+        "attachmentName": { "type": "string", "maxLength": 200 },
+        "attachmentUrl": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "meetingId", "senderId", "senderName", "text", "createdAt"]
+    },
+    "ScheduledMeeting": {
+      "title": "ScheduledMeeting",
+      "description": "Calendar scheduled meeting",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "meetingCode": { "type": "string", "maxLength": 64 },
+        "title": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 1000 },
+        "startTime": { "type": "string" },
+        "durationMinutes": { "type": "number" },
+        "hostId": { "type": "string", "maxLength": 128 },
+        "hostEmail": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "meetingCode", "title", "startTime", "durationMinutes", "hostId", "createdAt"]
+    },
+    "Contact": {
+      "title": "Contact",
+      "description": "Saved contact entry",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "contactEmail": { "type": "string", "maxLength": 200 },
+        "contactName": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "contactEmail", "contactName", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/public/profile": {
+      "schema": "UserProfile",
+      "description": "Public user profile information"
+    },
+    "/users/{userId}/private/preferences": {
+      "schema": "UserPreferences",
+      "description": "Private user preferences and PII"
+    },
+    "/meetings/{meetingId}": {
+      "schema": "Meeting",
+      "description": "Meeting room documents"
+    },
+    "/meetings/{meetingId}/messages/{messageId}": {
+      "schema": "MeetingMessage",
+      "description": "Chat messages inside a meeting room"
+    },
+    "/users/{userId}/scheduledMeetings/{scheduleId}": {
+      "schema": "ScheduledMeeting",
+      "description": "Meetings scheduled by a user"
+    },
+    "/users/{userId}/contacts/{contactId}": {
+      "schema": "Contact",
+      "description": "User contact directory"
+    }
+  }
+}

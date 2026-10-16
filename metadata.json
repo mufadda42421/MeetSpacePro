@@ -1,0 +1,6 @@
+{
+  "name": "MeetSpace - Enterprise Video Conferencing Platform",
+  "description": "Full-stack enterprise video conferencing platform featuring WebRTC video calls, Gemini-powered live audio transcription, screen sharing, real-time chat, meeting scheduling, and host controls.",
+  "requestFramePermissions": ["camera", "microphone", "display-capture"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
