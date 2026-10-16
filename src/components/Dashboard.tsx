@@ -65,13 +65,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenSchedule }) => {
     const raw = meetingCodeInput.trim();
     if (!raw) return;
 
-    // Handle full URL or code
+    // Handle full URL with query param or path or raw code
     let code = raw;
-    if (raw.includes('/meeting/')) {
+    if (raw.includes('meeting=')) {
+      code = raw.split('meeting=')[1].split('&')[0];
+    } else if (raw.includes('/meeting/')) {
       code = raw.split('/meeting/')[1].split('?')[0];
     } else if (raw.includes('/')) {
       code = raw.split('/').pop() || raw;
     }
+    // Clean code of hash or extra params
+    code = code.replace(/[?#].*$/, '').trim();
     await prepareMeeting(code, false);
   };
 

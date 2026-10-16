@@ -55,6 +55,10 @@ export class WebRTCManager {
       this.currentSocketId = this.socket?.id || '';
     });
 
+    this.socket.on('connect_error', (err) => {
+      console.warn('Socket connection warning (will retry automatically):', err.message);
+    });
+
     // Room response
     this.socket.on('room-joined', async (data) => {
       this.callbacks.onRoomJoined?.(data);
@@ -228,7 +232,17 @@ export class WebRTCManager {
     isHost?: boolean;
   }) {
     if (!this.socket) this.connect();
-    this.socket?.emit('join-room', params);
+
+    const emitJoin = () => {
+      this.socket?.emit('join-room', params);
+    };
+
+    if (this.socket?.connected) {
+      emitJoin();
+    } else {
+      this.socket?.once('connect', emitJoin);
+      emitJoin();
+    }
   }
 
   public updateMediaState(state: { audioEnabled?: boolean; videoEnabled?: boolean; screenSharing?: boolean }) {

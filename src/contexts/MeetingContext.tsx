@@ -224,9 +224,11 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         setIsHost(true);
       }
     } else {
-      // Joining existing code: lookup
       try {
-        const existing = await getMeeting(mid);
+        let existing: MeetingDoc | null = null;
+        if (user) {
+          existing = await getMeeting(mid);
+        }
         if (existing) {
           setMeetingDoc(existing);
           setIsHost(user ? existing.hostId === user.uid : false);
@@ -246,7 +248,19 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setIsHost(false);
         }
       } catch (err) {
-        console.warn('Error reading meeting:', err);
+        console.warn('Error reading meeting, creating ad-hoc session:', err);
+        const adHocDoc: MeetingDoc = {
+          meetingId: mid,
+          title: `Meeting ${mid}`,
+          hostId: 'unknown',
+          hostName: 'Organizer',
+          status: 'active',
+          isLocked: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setMeetingDoc(adHocDoc);
+        setIsHost(false);
       }
     }
 
@@ -262,6 +276,9 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const myName = profile?.displayName || user?.displayName || guestName || guestNameRef.current || 'Participant';
     const myId = user?.uid || `guest-${Math.random().toString(36).substring(2, 8)}`;
+
+    // Transition immediately to in-call so the user enters the room without delay
+    setMeetingState('in-call');
 
     // Set up WebRTC Manager
     const rtc = new WebRTCManager({
@@ -355,7 +372,9 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       },
       onRoomJoined: (data) => {
         setIsLocked(data.isLocked || false);
-        setRemoteParticipants(data.existingParticipants || []);
+        if (data.existingParticipants && Array.isArray(data.existingParticipants)) {
+          setRemoteParticipants(data.existingParticipants);
+        }
         setMeetingState('in-call');
       },
     });
@@ -377,13 +396,19 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       isHost,
     });
 
-    // Subscribe to Firestore chat if meetingId is active
-    if (chatUnsubscribeRef.current) {
-      chatUnsubscribeRef.current();
+    // Subscribe to Firestore chat ONLY if user is authenticated to adhere to security rules
+    if (user) {
+      try {
+        if (chatUnsubscribeRef.current) {
+          chatUnsubscribeRef.current();
+        }
+        chatUnsubscribeRef.current = subscribeMeetingMessages(meetingId, msgs => {
+          setMessages(msgs);
+        });
+      } catch (err) {
+        console.warn('Firestore chat listener error:', err);
+      }
     }
-    chatUnsubscribeRef.current = subscribeMeetingMessages(meetingId, msgs => {
-      setMessages(msgs);
-    });
 
     // Initialize Gemini 3.5 live transcription service
     transcriberRef.current = new LiveTranscriptionService(myName, myId, caption => {

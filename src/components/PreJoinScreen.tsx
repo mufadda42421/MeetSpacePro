@@ -41,11 +41,19 @@ export const PreJoinScreen: React.FC = () => {
   } = useMeeting();
 
   const [displayName, setDisplayName] = useState<string>(
-    profile?.displayName || user?.displayName || ''
+    profile?.displayName || user?.displayName || 'Guest User'
   );
+  const [isJoining, setIsJoining] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [showDeviceSettings, setShowDeviceSettings] = useState<boolean>(false);
   const [audioLevel, setAudioLevel] = useState<number>(0);
+
+  // Sync display name whenever user or profile loads asynchronously
+  useEffect(() => {
+    if (profile?.displayName || user?.displayName) {
+      setDisplayName(profile?.displayName || user?.displayName || '');
+    }
+  }, [profile, user]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -109,7 +117,15 @@ export const PreJoinScreen: React.FC = () => {
   };
 
   const handleJoin = async () => {
-    await joinCall(displayName.trim() || undefined);
+    const finalName = displayName.trim() || profile?.displayName || user?.displayName || 'Guest User';
+    setIsJoining(true);
+    try {
+      await joinCall(finalName);
+    } catch (err: any) {
+      console.error('Failed to join call:', err);
+    } finally {
+      setIsJoining(false);
+    }
   };
 
   return (
@@ -298,10 +314,17 @@ export const PreJoinScreen: React.FC = () => {
           <div className="space-y-3 pt-2">
             <button
               onClick={handleJoin}
-              disabled={!displayName.trim()}
-              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-white rounded-xl font-semibold shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
+              disabled={isJoining}
+              className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-70 text-white rounded-xl font-semibold shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Join meeting</span>
+              {isJoining ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Joining meeting...</span>
+                </>
+              ) : (
+                <span>Join meeting</span>
+              )}
             </button>
 
             <div className="p-3 rounded-2xl bg-white/5 border border-white/5 space-y-2 text-xs text-slate-400">

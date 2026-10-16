@@ -121,7 +121,7 @@ service cloud.firestore {
 
     // Meetings collection
     match /meetings/{meetingId} {
-      allow get: if isSignedIn() && isValidId(meetingId);
+      allow get: if isValidId(meetingId);
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isValidId(meetingId) && incoming().hostId == request.auth.uid && isValidMeeting(incoming());
       allow update: if isSignedIn() && isValidId(meetingId) && isValidMeeting(incoming()) && (
