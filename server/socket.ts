@@ -303,8 +303,11 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
             displayName: leavingParticipant?.displayName,
           });
 
-          // If host left, elect next available participant as host
-          if (room.hostSocketId === socket.id && room.participants.size > 0) {
+          // If room is now empty, clean it up completely so future joins are fresh
+          if (room.participants.size === 0) {
+            rooms.delete(currentCanonicalMeetingId);
+          } else if (room.hostSocketId === socket.id) {
+            // Elect next available participant as host
             const nextParticipant = Array.from(room.participants.values())[0];
             if (nextParticipant) {
               room.hostSocketId = nextParticipant.socketId;

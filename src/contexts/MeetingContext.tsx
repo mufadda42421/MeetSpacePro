@@ -14,7 +14,7 @@ import type {
   MeetingDoc,
 } from '../types';
 import { useAuth } from './AuthContext';
-import { normalizeMeetingCode, formatMeetingDisplayCode } from '../lib/meetingUtils';
+import { normalizeMeetingCode, formatMeetingDisplayCode, extractMeetingCodeFromUrl } from '../lib/meetingUtils';
 
 export type MeetingState = 'idle' | 'prejoin' | 'waiting' | 'in-call' | 'ended';
 
@@ -265,7 +265,30 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   // Join the actual call after device check - opens meeting room immediately
   const joinCall = async (guestName?: string) => {
-    if (!meetingId) return;
+    // Determine active meeting code
+    let activeMid = meetingId;
+    if (!activeMid) {
+      activeMid = extractMeetingCodeFromUrl() || (typeof window !== 'undefined' ? sessionStorage.getItem('meetspace_current_meeting_id') : null);
+      if (activeMid) {
+        setMeetingId(activeMid);
+      }
+    }
+
+    if (!activeMid) {
+      // Generate clean standard meeting code formatted as xxx-yyyy-zzz so user is never stuck
+      const p1 = Math.random().toString(36).substring(2, 5);
+      const p2 = Math.random().toString(36).substring(2, 6);
+      const p3 = Math.random().toString(36).substring(2, 5);
+      activeMid = `${p1}-${p2}-${p3}`;
+      setMeetingId(activeMid);
+    }
+
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('meetspace_current_meeting_id', activeMid);
+      const newUrl = `${window.location.pathname}?meeting=${encodeURIComponent(activeMid)}`;
+      window.history.replaceState({ meetingId: activeMid }, '', newUrl);
+    }
+
     if (guestName) guestNameRef.current = guestName;
 
     const myName = guestName || guestNameRef.current || userName || profile?.displayName || user?.displayName || 'Participant';
@@ -278,13 +301,47 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     // Set up WebRTC Manager
     const rtc = new WebRTCManager({
       onRemoteStream: (socketId, stream) => {
-        setRemoteParticipants(prev =>
-          prev.map(p => (p.socketId === socketId ? { ...p, stream } : p))
-        );
+        setRemoteParticipants(prev => {
+          const exists = prev.some(p => p.socketId === socketId);
+          if (!exists) {
+            return [
+              ...prev,
+              {
+                socketId,
+                userId: `peer-${socketId.substring(0, 5)}`,
+                displayName: 'Participant',
+                role: 'participant',
+                audioEnabled: true,
+                videoEnabled: true,
+                screenSharing: false,
+                handRaised: false,
+                status: 'active',
+                stream,
+              },
+            ];
+          }
+          return prev.map(p => {
+            if (p.socketId === socketId) {
+              if (p.stream && p.stream !== stream) {
+                // Merge all tracks so both audio and video are played
+                stream.getTracks().forEach(t => {
+                  if (!p.stream!.getTracks().some(existing => existing.id === t.id)) {
+                    p.stream!.addTrack(t);
+                  }
+                });
+                return { ...p, stream: new MediaStream(p.stream.getTracks()) };
+              }
+              return { ...p, stream };
+            }
+            return p;
+          });
+        });
       },
       onParticipantJoined: (p) => {
         setRemoteParticipants(prev => {
-          if (prev.some(existing => existing.socketId === p.socketId)) return prev;
+          if (prev.some(existing => existing.socketId === p.socketId)) {
+            return prev.map(existing => (existing.socketId === p.socketId ? { ...existing, ...p } : existing));
+          }
           return [...prev, p];
         });
       },
@@ -383,7 +440,7 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // Join room
     rtc.joinRoom({
-      meetingId,
+      meetingId: activeMid,
       userId: myId,
       displayName: myName,
       avatarUrl: profile?.photoURL || user?.photoURL || '',
@@ -396,7 +453,7 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (chatUnsubscribeRef.current) {
           chatUnsubscribeRef.current();
         }
-        chatUnsubscribeRef.current = subscribeMeetingMessages(meetingId, msgs => {
+        chatUnsubscribeRef.current = subscribeMeetingMessages(activeMid, msgs => {
           setMessages(msgs);
         });
       } catch (err) {

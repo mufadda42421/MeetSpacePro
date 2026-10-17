@@ -52,12 +52,17 @@ export class WebRTCManager {
   }
 
   public connect(): Socket {
-    if (this.socket) return this.socket;
+    if (this.socket) {
+      if (!this.socket.connected) {
+        this.socket.connect();
+      }
+      return this.socket;
+    }
 
     const host = window.location.origin;
     this.socket = io(host, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 15,
+      reconnectionAttempts: 20,
       reconnectionDelay: 1000,
     });
 
@@ -81,7 +86,9 @@ export class WebRTCManager {
       // For each existing active participant in this room, establish WebRTC peer connection
       if (data.existingParticipants && Array.isArray(data.existingParticipants)) {
         for (const peer of data.existingParticipants) {
-          await this.createPeerConnection(peer.socketId, true);
+          if (peer.socketId !== this.getSocketId()) {
+            await this.createPeerConnection(peer.socketId, true);
+          }
         }
       }
     });
@@ -93,6 +100,7 @@ export class WebRTCManager {
 
     // New participant joined
     this.socket.on('participant-joined', async (participant: Participant) => {
+      if (participant.socketId === this.getSocketId()) return;
       this.callbacks.onParticipantJoined(participant);
       await this.createPeerConnection(participant.socketId, false);
     });
@@ -175,7 +183,7 @@ export class WebRTCManager {
     });
 
     // Hand raise
-    this.socket.on('participant-hand-raised', (data: { socketId: string; handRaised: boolean }) => {
+    this.socket.on('participant-hand-changed', (data: { socketId: string; handRaised: boolean }) => {
       this.callbacks.onHandStateChanged(data.socketId, data.handRaised);
     });
 
@@ -238,7 +246,7 @@ export class WebRTCManager {
       stream.getTracks().forEach((track) => {
         const sender = senders.find((s) => s.track?.kind === track.kind);
         if (sender) {
-          sender.replaceTrack(track);
+          sender.replaceTrack(track).catch(console.warn);
         } else {
           try {
             pc.addTrack(track, stream);
@@ -332,11 +340,19 @@ export class WebRTCManager {
     // Add local tracks if available, or transceivers so remote media can be received
     if (this.localStream) {
       this.localStream.getTracks().forEach((track) => {
-        pc.addTrack(track, this.localStream!);
+        try {
+          pc.addTrack(track, this.localStream!);
+        } catch (e) {
+          console.warn('Track add error:', e);
+        }
       });
     } else {
-      pc.addTransceiver('audio', { direction: 'recvonly' });
-      pc.addTransceiver('video', { direction: 'recvonly' });
+      try {
+        pc.addTransceiver('audio', { direction: 'sendrecv' });
+        pc.addTransceiver('video', { direction: 'sendrecv' });
+      } catch (e) {
+        console.warn('Transceiver add warning:', e);
+      }
     }
 
     // ICE Candidate generation
@@ -344,16 +360,15 @@ export class WebRTCManager {
       if (event.candidate && this.socket) {
         this.socket.emit('signal-ice-candidate', {
           toSocketId: remoteSocketId,
-          candidate: event.candidate,
+          candidate: event.candidate.toJSON ? event.candidate.toJSON() : event.candidate,
         });
       }
     };
 
     // Receive Remote Track
     pc.ontrack = (event) => {
-      if (event.streams && event.streams[0]) {
-        this.callbacks.onRemoteStream(remoteSocketId, event.streams[0]);
-      }
+      const stream = (event.streams && event.streams[0]) ? event.streams[0] : new MediaStream([event.track]);
+      this.callbacks.onRemoteStream(remoteSocketId, stream);
     };
 
     pc.onconnectionstatechange = () => {

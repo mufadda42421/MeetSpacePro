@@ -133,18 +133,20 @@ export const MeetingRoom: React.FC = () => {
   // Video Grid layout calculations
   const totalStreams = allParticipants.length;
   const isPinned = !!pinnedSocketId;
+  const pinnedParticipant = allParticipants.find(p => p.socketId === pinnedSocketId) || localParticipant;
+  const pinnedStream = pinnedParticipant.socketId === 'local-user' ? localStream : (pinnedParticipant.stream || null);
 
   return (
-    <div className="flex-1 flex flex-col h-[calc(100vh-0rem)] bg-slate-950 overflow-hidden relative select-none">
+    <div className="flex-1 flex flex-col h-[100dvh] bg-slate-950 overflow-hidden relative select-none">
       {/* Top Header Bar */}
-      <header className="h-14 border-b border-white/10 px-4 md:px-6 flex items-center justify-between bg-slate-900/80 backdrop-blur-md z-20">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white shadow-md shadow-indigo-600/30">
+      <header className="h-14 border-b border-white/10 px-3 sm:px-6 flex items-center justify-between bg-slate-900/80 backdrop-blur-md z-20 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 truncate">
+          <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-white shadow-md shadow-indigo-600/30 shrink-0">
             M
           </div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-sm font-semibold text-white tracking-tight">
-              {meetingDoc?.title || 'MeetSpace Conference'}
+          <div className="flex items-center gap-1.5 sm:gap-2 truncate">
+            <h1 className="text-xs sm:text-sm font-semibold text-white tracking-tight truncate max-w-[120px] sm:max-w-xs">
+              {meetingDoc?.title || 'MeetSpace Call'}
             </h1>
             <span className="hidden sm:inline-block px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[11px] font-mono text-indigo-300">
               {meetingId}
@@ -153,7 +155,7 @@ export const MeetingRoom: React.FC = () => {
 
           <button
             onClick={handleCopyInvite}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-slate-300 hover:text-white transition-colors cursor-pointer"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-xs text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
             title="Copy meeting share link"
           >
             {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
@@ -162,16 +164,16 @@ export const MeetingRoom: React.FC = () => {
         </div>
 
         {/* Security & Room Status */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 shrink-0">
           {isLocked ? (
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-medium">
-              <Lock className="w-3.5 h-3.5" />
-              <span>Room Locked</span>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px] font-medium">
+              <Lock className="w-3 h-3" />
+              <span className="hidden sm:inline">Locked</span>
             </div>
           ) : (
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-xs font-medium">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Direct P2P</span>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[11px] font-medium">
+              <ShieldCheck className="w-3 h-3 text-emerald-400" />
+              <span className="hidden sm:inline">P2P</span>
             </div>
           )}
 
@@ -186,7 +188,7 @@ export const MeetingRoom: React.FC = () => {
               title={isLocked ? 'Unlock meeting room' : 'Lock meeting room'}
             >
               {isLocked ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">{isLocked ? 'Unlock' : 'Lock Room'}</span>
+              <span className="hidden sm:inline">{isLocked ? 'Unlock' : 'Lock'}</span>
             </button>
           )}
         </div>
@@ -194,20 +196,20 @@ export const MeetingRoom: React.FC = () => {
 
       {/* Waiting Room Alert for Host */}
       {isHost && waitingParticipants.length > 0 && (
-        <div className="bg-amber-500/15 border-b border-amber-500/30 px-6 py-2 flex items-center justify-between text-xs text-amber-200 z-20">
-          <span>
-            <strong>{waitingParticipants[0].displayName}</strong> is waiting to join the meeting ({waitingParticipants.length} waiting).
+        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 sm:px-6 py-2 flex items-center justify-between text-xs text-amber-200 z-20 shrink-0">
+          <span className="truncate mr-2">
+            <strong>{waitingParticipants[0].displayName}</strong> is waiting ({waitingParticipants.length} waiting).
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => hostDeny(waitingParticipants[0].socketId)}
-              className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer text-xs"
             >
               Deny
             </button>
             <button
               onClick={() => hostAdmit(waitingParticipants[0].socketId)}
-              className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-colors cursor-pointer text-xs"
             >
               Admit
             </button>
@@ -217,38 +219,28 @@ export const MeetingRoom: React.FC = () => {
 
       {/* Main Video Arena & Sidebars */}
       <div className="flex-1 flex overflow-hidden relative">
-        <div className="flex-1 flex flex-col p-3 md:p-5 overflow-hidden relative">
+        <div className="flex-1 flex flex-col p-2 sm:p-4 overflow-hidden relative">
           {/* Main Video Grid */}
           <div className="flex-1 flex items-center justify-center min-h-0 relative">
             {isPinned ? (
               /* Pinned / Spotlight Layout */
-              <div className="w-full h-full flex flex-col md:flex-row gap-4">
+              <div className="w-full h-full flex flex-col md:flex-row gap-3">
                 <div className="flex-1 h-full min-h-0 rounded-2xl overflow-hidden">
-                  {pinnedSocketId === 'local-user' ? (
-                    <VideoTile
-                      participant={localParticipant}
-                      stream={localStream}
-                      isLocal={true}
-                      isPinned={true}
-                      onPin={() => setPinnedSocketId(null)}
-                    />
-                  ) : (
-                    <VideoTile
-                      participant={remoteParticipants.find(p => p.socketId === pinnedSocketId) || remoteParticipants[0]}
-                      stream={remoteParticipants.find(p => p.socketId === pinnedSocketId)?.stream || null}
-                      isLocal={false}
-                      isPinned={true}
-                      onPin={() => setPinnedSocketId(null)}
-                    />
-                  )}
+                  <VideoTile
+                    participant={pinnedParticipant}
+                    stream={pinnedStream}
+                    isLocal={pinnedParticipant.socketId === 'local-user'}
+                    isPinned={true}
+                    onPin={() => setPinnedSocketId(null)}
+                  />
                 </div>
 
                 {/* Thumbnails rail on the side */}
-                <div className="w-full md:w-56 h-32 md:h-full flex md:flex-col gap-3 overflow-x-auto md:overflow-y-auto shrink-0">
+                <div className="w-full md:w-56 h-28 md:h-full flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto shrink-0">
                   {allParticipants
                     .filter(p => p.socketId !== pinnedSocketId)
                     .map(p => (
-                      <div key={p.socketId} className="w-44 md:w-full aspect-video shrink-0 rounded-xl overflow-hidden">
+                      <div key={p.socketId} className="w-40 md:w-full aspect-video shrink-0 rounded-xl overflow-hidden">
                         <VideoTile
                           participant={p}
                           stream={p.socketId === 'local-user' ? localStream : p.stream || null}
@@ -263,26 +255,28 @@ export const MeetingRoom: React.FC = () => {
             ) : (
               /* Dynamic Adaptive Responsive Grid */
               <div
-                className={`w-full h-full grid gap-4 place-items-stretch ${
+                className={`w-full h-full grid gap-2 sm:gap-4 place-items-stretch ${
                   totalStreams === 1
                     ? 'grid-cols-1 max-w-4xl max-h-[85vh]'
                     : totalStreams === 2
                     ? 'grid-cols-1 sm:grid-cols-2 max-w-5xl'
                     : totalStreams <= 4
-                    ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2'
+                    ? 'grid-cols-2 max-w-5xl'
                     : totalStreams <= 6
                     ? 'grid-cols-2 sm:grid-cols-3'
                     : 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4'
                 }`}
               >
                 {allParticipants.map(p => (
-                  <div key={p.socketId} className="w-full h-full min-h-[160px] rounded-2xl overflow-hidden">
+                  <div key={p.socketId} className="w-full h-full min-h-[140px] rounded-2xl overflow-hidden">
                     <VideoTile
                       participant={p}
                       stream={p.socketId === 'local-user' ? localStream : p.stream || null}
                       isLocal={p.socketId === 'local-user'}
                       isPinned={false}
                       onPin={() => setPinnedSocketId(p.socketId)}
+                      onHostMute={isHost ? hostMute : undefined}
+                      onHostKick={isHost ? hostKick : undefined}
                     />
                   </div>
                 ))}
@@ -297,18 +291,18 @@ export const MeetingRoom: React.FC = () => {
                 key={r.id}
                 className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/90 border border-white/20 shadow-2xl backdrop-blur-md animate-bounce"
               >
-                <span className="text-3xl">{r.emoji}</span>
+                <span className="text-2xl sm:text-3xl">{r.emoji}</span>
                 <span className="text-xs text-white font-medium">{r.senderName}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Collapsible Right Sidebar */}
+        {/* Collapsible Right Sidebar (Full overlay on mobile phones, side-panel on tablet/desktop) */}
         {activePanel !== 'none' && (
-          <aside className="w-80 md:w-96 border-l border-white/10 bg-slate-900/95 backdrop-blur-xl flex flex-col z-20">
+          <aside className="fixed inset-0 sm:static sm:inset-auto sm:w-80 md:w-96 border-l border-white/10 bg-slate-950/95 sm:bg-slate-900/95 backdrop-blur-2xl flex flex-col z-50 sm:z-20">
             {/* Panel Header */}
-            <div className="h-14 border-b border-white/10 px-4 flex items-center justify-between">
+            <div className="h-14 border-b border-white/10 px-4 flex items-center justify-between shrink-0">
               <span className="text-sm font-bold text-white capitalize">
                 {activePanel === 'chat' && 'Meeting Chat'}
                 {activePanel === 'participants' && `Participants (${allParticipants.length})`}
@@ -316,9 +310,9 @@ export const MeetingRoom: React.FC = () => {
               </span>
               <button
                 onClick={() => setActivePanel('none')}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                className="p-2 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
@@ -328,7 +322,7 @@ export const MeetingRoom: React.FC = () => {
                 <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
                   {messages.length === 0 ? (
                     <div className="text-center py-12 text-slate-500 text-xs">
-                      No messages yet. Say hello or share notes!
+                      No messages yet. Say hello to everyone!
                     </div>
                   ) : (
                     messages.map(m => {
@@ -367,23 +361,33 @@ export const MeetingRoom: React.FC = () => {
                   )}
                 </div>
 
-                {/* Chat Input Box */}
-                <form onSubmit={handleSendChat} className="p-3 border-t border-white/10 space-y-2">
+                {/* Chat Input Bar */}
+                <form onSubmit={handleSendChat} className="p-3 border-t border-white/10 space-y-2 shrink-0">
                   {showAttachmentInput && (
-                    <div className="p-2 rounded-xl bg-slate-950 border border-white/10 space-y-2 text-xs">
+                    <div className="p-2 rounded-xl bg-slate-800 border border-white/10 space-y-1.5 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-300 font-medium text-[11px]">Attach Link or Document</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowAttachmentInput(false)}
+                          className="text-slate-400 hover:text-white"
+                        >
+                          ✕
+                        </button>
+                      </div>
                       <input
                         type="text"
-                        placeholder="File name (e.g. DesignSpecs.pdf)"
+                        placeholder="File / Link title (e.g. Design Specs)"
                         value={attachmentName}
                         onChange={e => setAttachmentName(e.target.value)}
-                        className="w-full bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1 text-slate-200 placeholder-slate-500 focus:outline-none"
+                        className="w-full bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1 text-white text-xs focus:outline-none"
                       />
                       <input
                         type="url"
-                        placeholder="URL link to document or image"
+                        placeholder="URL (https://...)"
                         value={attachmentUrl}
                         onChange={e => setAttachmentUrl(e.target.value)}
-                        className="w-full bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1 text-slate-200 placeholder-slate-500 focus:outline-none"
+                        className="w-full bg-slate-900 border border-white/10 rounded-lg px-2.5 py-1 text-white text-xs focus:outline-none"
                       />
                     </div>
                   )}
@@ -392,10 +396,10 @@ export const MeetingRoom: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setShowAttachmentInput(!showAttachmentInput)}
-                      className={`p-2 rounded-xl transition-colors cursor-pointer ${
-                        showAttachmentInput ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
+                      className={`p-2 rounded-xl text-slate-400 hover:text-white transition-colors cursor-pointer ${
+                        showAttachmentInput ? 'bg-white/10 text-white' : ''
                       }`}
-                      title="Attach link or document"
+                      title="Attach link"
                     >
                       <Paperclip className="w-4 h-4" />
                     </button>
@@ -404,12 +408,12 @@ export const MeetingRoom: React.FC = () => {
                       placeholder="Send a message to everyone..."
                       value={chatInput}
                       onChange={e => setChatInput(e.target.value)}
-                      className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                      className="flex-1 bg-slate-800 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
                     <button
                       type="submit"
                       disabled={!chatInput.trim() && !attachmentUrl.trim()}
-                      className="p-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white transition-all cursor-pointer"
+                      className="p-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-xl transition-colors cursor-pointer"
                     >
                       <Send className="w-4 h-4" />
                     </button>
@@ -420,104 +424,72 @@ export const MeetingRoom: React.FC = () => {
 
             {/* Panel Content: PARTICIPANTS */}
             {activePanel === 'participants' && (
-              <div className="flex-1 flex flex-col min-h-0">
-                <div className="p-3 border-b border-white/10 flex items-center justify-between text-xs">
-                  <span className="text-slate-400">Total in room: {allParticipants.length}</span>
-                  <button
-                    onClick={handleCopyInvite}
-                    className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer"
-                  >
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>Copy Link</span>
-                  </button>
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  In This Call ({allParticipants.length})
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                  {allParticipants.map(p => (
-                    <div
-                      key={p.socketId}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center font-bold text-xs text-indigo-300 shrink-0">
-                          {p.displayName[0]?.toUpperCase() || 'P'}
-                        </div>
-                        <div className="truncate">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-white truncate">{p.displayName}</span>
-                            {p.socketId === 'local-user' && (
-                              <span className="text-[10px] text-slate-400 font-normal">(You)</span>
-                            )}
-                            {p.role === 'host' && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
-                                Host
-                              </span>
-                            )}
+                <div className="space-y-2">
+                  {allParticipants.map(p => {
+                    const isMe = p.socketId === 'local-user';
+                    return (
+                      <div
+                        key={p.socketId}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-800/60 border border-white/5"
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-white text-xs shrink-0">
+                            {(p.displayName || 'P')[0]?.toUpperCase()}
                           </div>
-                          <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                            {p.audioEnabled ? 'Mic on' : 'Mic muted'} • {p.videoEnabled ? 'Cam on' : 'Cam off'}
-                          </p>
+                          <div className="min-w-0 truncate">
+                            <span className="text-xs font-medium text-white truncate block">
+                              {p.displayName} {isMe ? '(You)' : ''}
+                            </span>
+                            <span className="text-[10px] text-slate-400 capitalize block">
+                              {p.role} {p.handRaised ? '• ✋ Hand Raised' : ''}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {p.audioEnabled ? (
+                            <Mic className="w-3.5 h-3.5 text-emerald-400" />
+                          ) : (
+                            <MicOff className="w-3.5 h-3.5 text-rose-400" />
+                          )}
+                          {p.videoEnabled ? (
+                            <VideoIcon className="w-3.5 h-3.5 text-slate-300" />
+                          ) : (
+                            <VideoOff className="w-3.5 h-3.5 text-slate-500" />
+                          )}
                         </div>
                       </div>
-
-                      {/* Participant Actions */}
-                      <div className="flex items-center gap-1 shrink-0">
-                        {p.handRaised && <span title="Raised hand" className="text-base">✋</span>}
-                        {isHost && p.socketId !== 'local-user' && (
-                          <>
-                            <button
-                              onClick={() => hostMute(p.socketId)}
-                              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-                              title="Mute participant"
-                            >
-                              <MicOff className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => hostKick(p.socketId)}
-                              className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-                              title="Remove from meeting"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
 
             {/* Panel Content: INFO */}
             {activePanel === 'info' && (
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-                <div className="space-y-1">
-                  <span className="text-[11px] font-semibold text-slate-400">Meeting Title</span>
-                  <p className="text-sm font-bold text-white">{meetingDoc?.title || 'MeetSpace Conference'}</p>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="text-[11px] font-semibold text-slate-400">Meeting Code</span>
-                  <div className="flex items-center justify-between p-2 rounded-xl bg-slate-950 border border-white/10 font-mono text-indigo-300">
-                    <span>{meetingId}</span>
-                    <button onClick={handleCopyInvite} className="text-slate-400 hover:text-white cursor-pointer">
-                      {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <span className="text-[11px] font-semibold text-slate-400">Direct Share Link</span>
-                  <p className="text-[11px] text-slate-300 break-all p-2 rounded-xl bg-slate-950 border border-white/10">
-                    {window.location.origin}?meeting={meetingId}
+              <div className="flex-1 overflow-y-auto p-4 space-y-5 text-xs text-slate-300">
+                <div className="space-y-2">
+                  <h3 className="text-sm font-bold text-white">{meetingDoc?.title || 'MeetSpace Session'}</h3>
+                  <p className="text-slate-400 leading-relaxed">
+                    Direct peer-to-peer encrypted WebRTC conference with audio, video, and screen sharing.
                   </p>
                 </div>
 
-                <div className="pt-2 border-t border-white/10 space-y-2 text-slate-400">
-                  <p className="font-semibold text-white">Security & Privacy</p>
-                  <p className="text-[11px] leading-relaxed">
-                    Peer-to-peer WebRTC encryption for media streaming directly between active participants.
-                  </p>
+                <div className="p-3.5 rounded-xl bg-slate-800/60 border border-white/10 space-y-2 font-mono">
+                  <span className="text-[11px] text-slate-400 block uppercase">Meeting Code</span>
+                  <span className="text-sm text-indigo-300 font-bold block">{meetingId}</span>
+                  <button
+                    onClick={handleCopyInvite}
+                    className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-sans font-medium text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedLink ? 'Link Copied!' : 'Copy Share Link'}</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -525,9 +497,9 @@ export const MeetingRoom: React.FC = () => {
         )}
       </div>
 
-      {/* Floating Emoji Reactions Selector */}
+      {/* Floating Reactions Bar Overlay */}
       {showReactionsBar && (
-        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex items-center gap-2 p-2 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl z-40 backdrop-blur-md">
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-slate-900/95 border border-white/15 shadow-2xl backdrop-blur-xl p-2 rounded-2xl flex items-center gap-2 z-40 animate-in fade-in slide-in-from-bottom-2 duration-150">
           {reactionEmojis.map(emoji => (
             <button
               key={emoji}
@@ -535,7 +507,7 @@ export const MeetingRoom: React.FC = () => {
                 sendReaction(emoji);
                 setShowReactionsBar(false);
               }}
-              className="text-2xl p-1.5 hover:scale-125 transition-transform cursor-pointer"
+              className="w-9 h-9 rounded-xl hover:bg-white/10 flex items-center justify-center text-xl transition-transform hover:scale-125 active:scale-95 cursor-pointer"
             >
               {emoji}
             </button>
@@ -543,36 +515,34 @@ export const MeetingRoom: React.FC = () => {
         </div>
       )}
 
-      {/* Bottom Main Control Bar */}
-      <footer className="h-20 border-t border-white/10 px-4 md:px-8 bg-slate-900/90 backdrop-blur-xl flex items-center justify-between z-20">
-        {/* Left: Meeting Name / Timer */}
-        <div className="hidden lg:flex items-center gap-3 w-56">
-          <span className="font-mono text-xs text-slate-400">
-            {meetingId}
-          </span>
-          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-xs text-slate-400 font-medium">Connected</span>
+      {/* Bottom Main Call Controls Bar */}
+      <footer className="h-16 sm:h-20 border-t border-white/10 bg-slate-900/90 backdrop-blur-md px-2 sm:px-6 flex items-center justify-between z-20 shrink-0">
+        {/* Left: Meeting ID (Desktop only) */}
+        <div className="hidden lg:flex items-center gap-2 text-xs font-mono text-slate-400">
+          <span className="font-semibold text-slate-200">{meetingId}</span>
+          <span>•</span>
+          <span>{allParticipants.length} connected</span>
         </div>
 
-        {/* Center: Main Media & Interactive Controls */}
-        <div className="flex items-center gap-2 md:gap-3 mx-auto">
-          {/* Audio Toggle + Device Menu */}
+        {/* Center: Primary Media Controls */}
+        <div className="flex items-center gap-1.5 sm:gap-3 mx-auto lg:mx-0">
+          {/* Mic Toggle with device selector */}
           <div className="relative">
-            <div className="flex items-center rounded-xl bg-slate-800 border border-white/10 shadow-lg">
+            <div className="flex items-center bg-slate-800 rounded-xl border border-white/10">
               <button
                 onClick={toggleAudio}
-                className={`p-3 rounded-l-xl transition-all cursor-pointer ${
+                className={`p-2.5 sm:p-3 rounded-l-xl transition-all cursor-pointer ${
                   audioEnabled
                     ? 'hover:bg-slate-700 text-white'
                     : 'bg-rose-600 hover:bg-rose-500 text-white'
                 }`}
                 title={audioEnabled ? 'Mute microphone' : 'Unmute microphone'}
               >
-                {audioEnabled ? <Mic className="w-5 h-5" /> : <MicOff className="w-5 h-5 text-white" />}
+                {audioEnabled ? <Mic className="w-4 h-4 sm:w-5 sm:h-5" /> : <MicOff className="w-4 h-4 sm:w-5 sm:h-5 text-white" />}
               </button>
               <button
                 onClick={() => setShowAudioMenu(!showAudioMenu)}
-                className="px-1.5 py-3 hover:bg-slate-700 text-slate-300 rounded-r-xl border-l border-white/10 transition-colors cursor-pointer"
+                className="px-1 sm:px-1.5 py-2.5 sm:py-3 hover:bg-slate-700 text-slate-300 rounded-r-xl border-l border-white/10 transition-colors cursor-pointer hidden sm:block"
                 title="Microphone hardware options"
               >
                 <ChevronUp className="w-3.5 h-3.5" />
@@ -582,16 +552,7 @@ export const MeetingRoom: React.FC = () => {
             {/* Audio Hardware Menu Popup */}
             {showAudioMenu && (
               <div className="absolute bottom-16 left-0 w-64 p-3 rounded-2xl bg-slate-900 border border-white/15 shadow-2xl text-xs space-y-2 z-40">
-                <div className="flex items-center justify-between pb-1 border-b border-white/10">
-                  <span className="font-bold text-white">Select Microphone</span>
-                  <button
-                    onClick={testAudioOutput}
-                    className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 cursor-pointer"
-                  >
-                    <Volume2 className="w-3 h-3" />
-                    <span>Test Sound</span>
-                  </button>
-                </div>
+                <span className="font-bold text-white block pb-1 border-b border-white/10">Select Microphone</span>
                 <div className="max-h-40 overflow-y-auto space-y-1">
                   {devices.audioInputs.map(d => (
                     <button
@@ -614,23 +575,23 @@ export const MeetingRoom: React.FC = () => {
             )}
           </div>
 
-          {/* Video Toggle + Device Menu */}
+          {/* Camera Toggle with device selector */}
           <div className="relative">
-            <div className="flex items-center rounded-xl bg-slate-800 border border-white/10 shadow-lg">
+            <div className="flex items-center bg-slate-800 rounded-xl border border-white/10">
               <button
                 onClick={toggleVideo}
-                className={`p-3 rounded-l-xl transition-all cursor-pointer ${
+                className={`p-2.5 sm:p-3 rounded-l-xl transition-all cursor-pointer ${
                   videoEnabled
                     ? 'hover:bg-slate-700 text-white'
                     : 'bg-rose-600 hover:bg-rose-500 text-white'
                 }`}
                 title={videoEnabled ? 'Turn off camera' : 'Turn on camera'}
               >
-                {videoEnabled ? <VideoIcon className="w-5 h-5" /> : <VideoOff className="w-5 h-5 text-white" />}
+                {videoEnabled ? <VideoIcon className="w-4 h-4 sm:w-5 sm:h-5" /> : <VideoOff className="w-4 h-4 sm:w-5 sm:h-5 text-white" />}
               </button>
               <button
                 onClick={() => setShowVideoMenu(!showVideoMenu)}
-                className="px-1.5 py-3 hover:bg-slate-700 text-slate-300 rounded-r-xl border-l border-white/10 transition-colors cursor-pointer"
+                className="px-1 sm:px-1.5 py-2.5 sm:py-3 hover:bg-slate-700 text-slate-300 rounded-r-xl border-l border-white/10 transition-colors cursor-pointer hidden sm:block"
                 title="Camera hardware options"
               >
                 <ChevronUp className="w-3.5 h-3.5" />
@@ -666,36 +627,36 @@ export const MeetingRoom: React.FC = () => {
           {/* Screen Share Toggle */}
           <button
             onClick={toggleScreenShare}
-            className={`p-3 rounded-xl transition-all cursor-pointer ${
+            className={`p-2.5 sm:p-3 rounded-xl transition-all cursor-pointer ${
               screenSharing
                 ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10'
             }`}
             title={screenSharing ? 'Stop sharing screen' : 'Share entire screen or tab'}
           >
-            <MonitorUp className="w-5 h-5" />
+            <MonitorUp className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           {/* Raise Hand Toggle */}
           <button
             onClick={toggleHandRaise}
-            className={`p-3 rounded-xl transition-all cursor-pointer ${
+            className={`p-2.5 sm:p-3 rounded-xl transition-all cursor-pointer ${
               handRaised
                 ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/30'
                 : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10'
             }`}
             title={handRaised ? 'Lower hand' : 'Raise hand'}
           >
-            <Hand className="w-5 h-5" />
+            <Hand className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           {/* Emoji Reactions Picker Toggle */}
           <button
             onClick={() => setShowReactionsBar(!showReactionsBar)}
-            className="p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-colors cursor-pointer"
+            className="p-2.5 sm:p-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-white/10 transition-colors cursor-pointer"
             title="React with emojis"
           >
-            <Smile className="w-5 h-5" />
+            <Smile className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           {/* End / Leave Meeting Button */}
@@ -708,28 +669,28 @@ export const MeetingRoom: React.FC = () => {
                   leaveCall();
                 }
               }}
-              className="p-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              className="p-2.5 sm:p-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
               title="End meeting or leave"
             >
-              <PhoneOff className="w-5 h-5" />
+              <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           ) : (
             <button
               onClick={leaveCall}
-              className="p-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              className="p-2.5 sm:p-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
               title="Leave call"
             >
-              <PhoneOff className="w-5 h-5" />
+              <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
         </div>
 
         {/* Right: Sidebar Toggles */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2">
           {/* Chat Panel Toggle */}
           <button
             onClick={() => setActivePanel(activePanel === 'chat' ? 'none' : 'chat')}
-            className={`p-2.5 rounded-xl transition-colors relative cursor-pointer ${
+            className={`p-2 sm:p-2.5 rounded-xl transition-colors relative cursor-pointer ${
               activePanel === 'chat' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
             title="Meeting chat"
@@ -743,19 +704,19 @@ export const MeetingRoom: React.FC = () => {
           {/* Participants Panel Toggle */}
           <button
             onClick={() => setActivePanel(activePanel === 'participants' ? 'none' : 'participants')}
-            className={`p-2.5 rounded-xl transition-colors relative cursor-pointer ${
+            className={`p-2 sm:p-2.5 rounded-xl transition-colors relative cursor-pointer flex items-center ${
               activePanel === 'participants' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
             title="Participants list"
           >
             <Users className="w-4 h-4" />
-            <span className="ml-1 text-xs font-semibold">{allParticipants.length}</span>
+            <span className="ml-1 text-[11px] sm:text-xs font-semibold">{allParticipants.length}</span>
           </button>
 
           {/* Info Details Toggle */}
           <button
             onClick={() => setActivePanel(activePanel === 'info' ? 'none' : 'info')}
-            className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
+            className={`p-2 sm:p-2.5 rounded-xl transition-colors cursor-pointer hidden sm:block ${
               activePanel === 'info' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white hover:bg-white/5'
             }`}
             title="Meeting details"

@@ -15,11 +15,16 @@ import {
   Check,
   User,
   Zap,
+  Smartphone,
+  Lock,
+  Mic,
+  Share2,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useMeeting } from '../contexts/MeetingContext';
 import { getScheduledMeetings, deleteScheduledMeeting } from '../lib/firestoreService';
 import type { ScheduledMeetingItem } from '../types';
+import { normalizeMeetingCode } from '../lib/meetingUtils';
 
 interface DashboardProps {
   onOpenSchedule: () => void;
@@ -37,6 +42,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenSchedule }) => {
   const [nameInput, setNameInput] = useState<string>(userName || '');
   const [rememberCheck, setRememberCheck] = useState<boolean>(rememberMe ?? true);
   const [nameSavedSuccess, setNameSavedSuccess] = useState<boolean>(false);
+  const [activeTab, setActiveTab] = useState<'instant' | 'join' | 'schedule'>('instant');
 
   useEffect(() => {
     if (userName) {
@@ -90,17 +96,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenSchedule }) => {
       saveName(nameInput.trim(), rememberCheck);
     }
 
-    // Handle full URL with query param or path or raw code
-    let code = raw;
-    if (raw.includes('meeting=')) {
-      code = raw.split('meeting=')[1].split('&')[0];
-    } else if (raw.includes('/meeting/')) {
-      code = raw.split('/meeting/')[1].split('?')[0];
-    } else if (raw.includes('/')) {
-      code = raw.split('/').pop() || raw;
-    }
-    // Clean code of hash or extra params
-    code = code.replace(/[?#].*$/, '').trim();
+    const code = normalizeMeetingCode(raw);
     await prepareMeeting(code, false);
   };
 
@@ -157,32 +153,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenSchedule }) => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-6 py-10 space-y-12">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-12 space-y-8 sm:space-y-14">
       {/* Hero Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
-        <div className="lg:col-span-7 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        <div className="lg:col-span-7 space-y-5 sm:space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-semibold">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-            <span>High-Definition Video Collaboration</span>
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span>Encrypted Direct WebRTC Video</span>
           </div>
 
-          <h1 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
-            Meet face-to-face, <br />
+          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-white leading-tight">
+            Premium Video Meetings. <br />
             <span className="bg-gradient-to-r from-indigo-400 via-blue-400 to-cyan-300 bg-clip-text text-transparent">
-              from anywhere in the world.
+              On Any Device, Anywhere.
             </span>
           </h1>
 
-          <p className="text-base text-slate-400 max-w-xl leading-relaxed">
-            Fast, secure video conferencing with WebRTC peer-to-peer media, screen sharing, waiting rooms, and real-time interactive messaging.
+          <p className="text-sm sm:text-base text-slate-400 max-w-xl leading-relaxed">
+            Ultra-fast, peer-to-peer enterprise video conferencing with crystal clear audio, HD camera feeds, full screen sharing, and real-time chat. Fully responsive on desktop and mobile phones.
           </p>
 
-          {/* User Name & Remember Me Box */}
-          <div className="p-4 rounded-2xl bg-slate-900/90 border border-white/10 space-y-3">
+          {/* User Display Name & Remember Me Card */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-white/10 shadow-xl space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-indigo-400" />
-                <span>Your Display Name</span>
+                <span>Your Meeting Display Name</span>
               </span>
               {nameSavedSuccess && (
                 <span className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
@@ -194,16 +190,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenSchedule }) => {
             <form onSubmit={handleSaveName} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
               <input
                 type="text"
-                placeholder="Enter your name (e.g. Alex Taylor)"
+                placeholder="Enter your name (e.g. Sarah Connor)"
                 value={nameInput}
                 onChange={e => setNameInput(e.target.value)}
-                className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               />
               <button
                 type="submit"
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer shrink-0"
               >
-                Save
+                Save Name
               </button>
             </form>
 
@@ -219,220 +215,286 @@ export const Dashboard: React.FC<DashboardProps> = ({ onOpenSchedule }) => {
                 }}
                 className="w-4 h-4 rounded text-indigo-600 bg-slate-950 border-white/20 focus:ring-0 focus:ring-offset-0 cursor-pointer"
               />
-              <span>Remember my name throughout meetings</span>
+              <span>Remember my name across meetings</span>
             </label>
           </div>
 
-          {/* Quick Actions */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-2">
-            <button
-              onClick={handleStartInstant}
-              className="flex items-center justify-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Start an instant meeting</span>
-            </button>
-
-            <form onSubmit={handleJoinWithCode} className="flex-1 flex items-center gap-2">
-              <div className="relative flex-1">
-                <Keyboard className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  placeholder="Enter a code or link"
-                  value={meetingCodeInput}
-                  onChange={e => setMeetingCodeInput(e.target.value)}
-                  className="w-full bg-slate-900 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                />
-              </div>
+          {/* Mobile & Desktop Action Area */}
+          <div className="space-y-3 pt-1">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
               <button
-                type="submit"
-                disabled={!meetingCodeInput.trim()}
-                className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-slate-800 text-white text-sm font-semibold border border-white/10 transition-colors cursor-pointer"
+                onClick={handleStartInstant}
+                className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
               >
-                Join
+                <Plus className="w-5 h-5" />
+                <span>Start instant meeting</span>
               </button>
-            </form>
-          </div>
 
-          <div className="flex items-center gap-3 pt-2 text-xs text-slate-400">
-            <button
-              onClick={onOpenSchedule}
-              className="flex items-center gap-1.5 text-indigo-400 hover:text-indigo-300 transition-colors font-medium cursor-pointer"
-            >
-              <Calendar className="w-4 h-4" />
-              <span>Schedule a meeting for later</span>
-            </button>
-            <span>•</span>
-            <span>No account or software installation required</span>
+              <form onSubmit={handleJoinWithCode} className="w-full sm:flex-1 flex items-center gap-2">
+                <div className="relative flex-1">
+                  <Keyboard className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="Enter code or paste link"
+                    value={meetingCodeInput}
+                    onChange={e => setMeetingCodeInput(e.target.value)}
+                    className="w-full bg-slate-900 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={!meetingCodeInput.trim()}
+                  className="px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white text-sm font-semibold border border-white/10 transition-colors cursor-pointer shrink-0"
+                >
+                  Join
+                </button>
+              </form>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs text-slate-400 pt-1">
+              <button
+                onClick={onOpenSchedule}
+                className="flex items-center gap-1.5 text-indigo-400 hover:text-indigo-300 transition-colors font-medium cursor-pointer"
+              >
+                <Calendar className="w-4 h-4" />
+                <span>Schedule for later</span>
+              </button>
+              <span>•</span>
+              <span className="flex items-center gap-1 text-slate-400">
+                <Smartphone className="w-3.5 h-3.5 text-slate-400" />
+                <span>Works on iOS, Android & Desktop</span>
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Feature Hero Card */}
+        {/* Hero Interactive Card / Preview */}
         <div className="lg:col-span-5">
-          <div className="relative rounded-3xl p-6 bg-gradient-to-b from-slate-800/80 to-slate-900/80 border border-white/10 shadow-2xl backdrop-blur-xl space-y-4">
+          <div className="relative rounded-3xl p-5 sm:p-6 bg-gradient-to-b from-slate-900/90 to-slate-950/90 border border-white/10 shadow-2xl backdrop-blur-xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-rose-500" />
-                <span className="w-3 h-3 rounded-full bg-amber-500" />
-                <span className="w-3 h-3 rounded-full bg-emerald-500" />
+                <span className="w-2.5 h-2.5 rounded-full bg-rose-500" />
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
               </div>
-              <span className="text-xs text-slate-400 font-mono">Live Conference Ready</span>
+              <span className="text-[11px] text-slate-400 font-mono">Mobile & Desktop Ready</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+            {/* Feature Grid inside Card */}
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
                   <Video className="w-4 h-4" />
                 </div>
-                <h4 className="text-xs font-semibold text-white">WebRTC HD Video</h4>
+                <h4 className="text-xs font-semibold text-white">HD Video & Audio</h4>
                 <p className="text-[11px] text-slate-400 leading-normal">
-                  Peer-to-peer low-latency encrypted media with dynamic bandwidth adaptation.
+                  Low-latency WebRTC streams with auto echo cancellation.
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                <div className="w-8 h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
                   <MonitorUp className="w-4 h-4" />
                 </div>
-                <h4 className="text-xs font-semibold text-white">Screen Sharing</h4>
+                <h4 className="text-xs font-semibold text-white">Screen Share</h4>
                 <p className="text-[11px] text-slate-400 leading-normal">
-                  Share entire display, application windows, or browser tabs with system audio.
+                  Present displays, slide decks, or tabs with 1 tap.
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
                   <MessageSquare className="w-4 h-4" />
                 </div>
-                <h4 className="text-xs font-semibold text-white">Live Room Chat</h4>
+                <h4 className="text-xs font-semibold text-white">In-Room Chat</h4>
                 <p className="text-[11px] text-slate-400 leading-normal">
-                  Instant messaging, document links, and floating emoji reactions for all attendees.
+                  Real-time chat, file links, and emoji reactions.
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-2">
-                <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center">
-                  <ShieldCheck className="w-4 h-4" />
+              <div className="p-3 sm:p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1.5">
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center">
+                  <Lock className="w-4 h-4" />
                 </div>
-                <h4 className="text-xs font-semibold text-white">Host Moderation</h4>
+                <h4 className="text-xs font-semibold text-white">Host Controls</h4>
                 <p className="text-[11px] text-slate-400 leading-normal">
-                  Waiting rooms, mute controls, meeting lock, and participant admission.
+                  Lock room, waiting room, mute, and attendee management.
                 </p>
               </div>
+            </div>
+
+            {/* Quick Share Tip Box */}
+            <div className="p-3 rounded-xl bg-indigo-950/40 border border-indigo-500/20 flex items-center gap-2.5 text-xs text-indigo-300">
+              <Share2 className="w-4 h-4 shrink-0 text-indigo-400" />
+              <span className="text-[11px] leading-relaxed">
+                Send the meeting link to anyone. Multiple people can join simultaneously with audio & video.
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Scheduled Meetings / Calendar Section */}
-      <div className="pt-6 border-t border-white/10 space-y-6">
-        <div className="flex items-center justify-between">
+      {/* Scheduled Meetings Section */}
+      <div className="space-y-4 pt-4 border-t border-white/10">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-            <h2 className="text-xl font-bold text-white tracking-tight">Your Scheduled Meetings</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              Scheduled Meetings
+            </h2>
             <p className="text-xs text-slate-400 mt-0.5">
-              Stored securely and exportable to Google Calendar or Outlook (.ics)
+              Manage your upcoming sessions or schedule a new one
             </p>
           </div>
+
           <button
             onClick={onOpenSchedule}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-xs font-medium text-slate-300 hover:text-white transition-colors border border-white/10 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Schedule New</span>
+            <Calendar className="w-4 h-4 text-indigo-400" />
+            <span>Schedule New Meeting</span>
           </button>
         </div>
 
         {loadingSchedule ? (
-          <div className="py-12 text-center text-slate-500 text-sm">Loading your meetings...</div>
+          <div className="p-10 text-center text-slate-500 text-xs">
+            Loading scheduled meetings...
+          </div>
         ) : scheduledList.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 p-10 text-center space-y-3">
-            <div className="w-12 h-12 rounded-2xl bg-white/5 flex items-center justify-center mx-auto text-slate-400">
-              <Calendar className="w-6 h-6" />
-            </div>
-            <div className="space-y-1">
-              <h3 className="text-sm font-semibold text-slate-300">No scheduled meetings</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Schedule a future conference call with automated calendar export and shareable invitation links.
-              </p>
-            </div>
-            <button
-              onClick={onOpenSchedule}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-indigo-400 text-xs font-semibold rounded-xl border border-indigo-500/20 transition-colors cursor-pointer"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Schedule meeting</span>
-            </button>
+          <div className="p-8 sm:p-12 text-center rounded-2xl bg-slate-900/40 border border-white/5 space-y-3">
+            <Calendar className="w-8 h-8 text-slate-600 mx-auto" />
+            <h3 className="text-sm font-semibold text-slate-300">No scheduled meetings yet</h3>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+              Create an instant meeting above or schedule a call in advance to share invite links and calendar invites with attendees.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {scheduledList.map(item => {
-              const d = new Date(item.startTime);
-              const isPast = d.getTime() < Date.now();
-
-              return (
-                <div
-                  key={item.id}
-                  className={`p-4 rounded-2xl border ${
-                    isPast ? 'bg-slate-900/40 border-white/5 opacity-70' : 'bg-slate-900/80 border-white/10'
-                  } space-y-3 flex flex-col justify-between`}
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <h4 className="text-sm font-bold text-white line-clamp-1">{item.title}</h4>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                        {item.meetingCode}
-                      </span>
-                    </div>
-                    {item.description && (
-                      <p className="text-xs text-slate-400 line-clamp-2">{item.description}</p>
-                    )}
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                      <Clock className="w-3.5 h-3.5 text-slate-500" />
-                      <span>
-                        {d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at{' '}
-                        {d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({item.durationMinutes} min)
-                      </span>
-                    </div>
+            {scheduledList.map(item => (
+              <div
+                key={item.id}
+                className="p-4 sm:p-5 rounded-2xl bg-slate-900/90 border border-white/10 space-y-3 hover:border-white/20 transition-all flex flex-col justify-between"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <h3 className="text-sm font-bold text-white leading-tight truncate">
+                      {item.title}
+                    </h3>
+                    <button
+                      onClick={() => handleDeleteSchedule(item.id)}
+                      className="p-1 text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                      title="Delete meeting"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleCopyLink(item.meetingCode, item.id)}
-                        className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
-                        title="Copy invitation URL"
-                      >
-                        {copiedId === item.id ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-                      </button>
-                      <button
-                        onClick={() => handleExportIcs(item)}
-                        className="p-1.5 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
-                        title="Download .ics calendar event"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteSchedule(item.id)}
-                        className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
-                        title="Delete scheduled meeting"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
+                    <Clock className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>{new Date(item.startTime).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                    <span>({item.durationMinutes}m)</span>
+                  </div>
+
+                  {item.description && (
+                    <p className="text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                      {item.description}
+                    </p>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-white/5 space-y-2">
+                  <div className="flex items-center justify-between text-xs font-mono text-slate-400">
+                    <span className="text-indigo-300 font-medium truncate">{item.meetingCode}</span>
+                    <button
+                      onClick={() => handleCopyLink(item.meetingCode, item.id)}
+                      className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                      title="Copy join link"
+                    >
+                      {copiedId === item.id ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copiedId === item.id ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => {
+                        if (nameInput.trim()) {
+                          saveName(nameInput.trim(), rememberCheck);
+                        }
+                        prepareMeeting(item.meetingCode, false);
+                      }}
+                      className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <span>Join Now</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
 
                     <button
-                      onClick={() => prepareMeeting(item.meetingCode, false, item.title)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all cursor-pointer"
+                      onClick={() => handleExportIcs(item)}
+                      className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/10 transition-colors cursor-pointer"
+                      title="Add to calendar (.ics)"
                     >
-                      <span>Join</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      <Download className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
-              );
-            })}
+              </div>
+            ))}
           </div>
         )}
+      </div>
+
+      {/* Feature Showcase Grid */}
+      <div className="pt-4 border-t border-white/10 space-y-6">
+        <div className="text-center max-w-xl mx-auto space-y-1">
+          <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+            Designed for Modern Collaboration
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-400">
+            Enterprise video capabilities built with direct WebRTC peer connections
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2.5">
+            <div className="w-9 h-9 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+              <Video className="w-5 h-5" />
+            </div>
+            <h3 className="text-sm font-semibold text-white">Full HD Video Calls</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Crisp 720p/1080p peer-to-peer video with automatic bandwidth scaling and device selection.
+            </p>
+          </div>
+
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2.5">
+            <div className="w-9 h-9 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center">
+              <MonitorUp className="w-5 h-5" />
+            </div>
+            <h3 className="text-sm font-semibold text-white">Screen Presentations</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Share full screen, app windows, or specific browser tabs with pinned speaker focus.
+            </p>
+          </div>
+
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center">
+              <ShieldCheck className="w-5 h-5" />
+            </div>
+            <h3 className="text-sm font-semibold text-white">Direct P2P Encryption</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Direct DTLS-SRTP encrypted peer media streams with no intermediaries recording your audio.
+            </p>
+          </div>
+
+          <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-white/10 space-y-2.5">
+            <div className="w-9 h-9 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+              <Smartphone className="w-5 h-5" />
+            </div>
+            <h3 className="text-sm font-semibold text-white">Mobile & Tablet Native</h3>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Responsive touch controls, front/back camera support, and full-screen mobile layouts.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -58,25 +58,30 @@ export const PreJoinScreen: React.FC = () => {
 
   // Connect local video stream to preview tile
   useEffect(() => {
-    if (videoRef.current && localStream && videoEnabled) {
+    if (videoRef.current && localStream) {
       videoRef.current.srcObject = localStream;
     }
   }, [localStream, videoEnabled]);
 
-  // Audio level meter visualization
+  // Audio level meter for microphone activity
   useEffect(() => {
     if (!localStream || !audioEnabled) {
       setAudioLevel(0);
       return;
     }
 
+    const audioTrack = localStream.getAudioTracks()[0];
+    if (!audioTrack) {
+      setAudioLevel(0);
+      return;
+    }
+
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+
       const ctx = new AudioCtx();
       audioContextRef.current = ctx;
-
-      const audioTrack = localStream.getAudioTracks()[0];
-      if (!audioTrack) return;
 
       const source = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
       const analyser = ctx.createAnalyser();
@@ -127,8 +132,8 @@ export const PreJoinScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-6 bg-slate-950">
-      <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4 sm:p-6 bg-slate-950">
+      <div className="max-w-4xl w-full grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 items-center">
         {/* Left: Video Preview Card */}
         <div className="lg:col-span-7 space-y-4">
           <div className="relative aspect-video rounded-3xl overflow-hidden bg-slate-900 border border-white/10 shadow-2xl flex items-center justify-center">
@@ -142,7 +147,7 @@ export const PreJoinScreen: React.FC = () => {
               />
             ) : (
               <div className="text-center space-y-3">
-                <div className="w-20 h-20 rounded-full bg-slate-800 border border-white/10 mx-auto flex items-center justify-center font-bold text-2xl text-slate-300">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-slate-800 border border-white/10 mx-auto flex items-center justify-center font-bold text-2xl text-slate-300">
                   {(displayName || userName || 'P')[0]?.toUpperCase()}
                 </div>
                 <p className="text-xs text-slate-400 font-medium">Camera is off</p>
@@ -192,7 +197,7 @@ export const PreJoinScreen: React.FC = () => {
                     ? 'bg-slate-800/90 hover:bg-slate-700 text-white border border-white/10 shadow-lg'
                     : 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30'
                 }`}
-                title={videoEnabled ? 'Turn camera off' : 'Turn camera on'}
+                title={videoEnabled ? 'Turn off camera' : 'Turn on camera'}
               >
                 {videoEnabled ? <VideoIcon className="w-5 h-5" /> : <VideoOff className="w-5 h-5" />}
               </button>
@@ -200,36 +205,29 @@ export const PreJoinScreen: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowDeviceSettings(!showDeviceSettings)}
-                className="w-12 h-12 rounded-full bg-slate-800/90 hover:bg-slate-700 text-white border border-white/10 flex items-center justify-center transition-colors shadow-lg cursor-pointer"
-                title="Configure audio & video hardware"
+                className={`w-12 h-12 rounded-full flex items-center justify-center transition-all cursor-pointer border ${
+                  showDeviceSettings
+                    ? 'bg-indigo-600 text-white border-indigo-500'
+                    : 'bg-slate-800/90 hover:bg-slate-700 text-slate-300 border-white/10'
+                }`}
+                title="Audio and video device settings"
               >
                 <Settings className="w-5 h-5" />
               </button>
             </div>
           </div>
 
-          {/* Device configuration popup */}
+          {/* Device Settings Popover / Card */}
           {showDeviceSettings && (
-            <div className="p-4 rounded-2xl bg-slate-900 border border-white/10 space-y-3 animate-in fade-in text-xs">
-              <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                <span className="font-semibold text-white">Hardware Settings</span>
-                <button
-                  type="button"
-                  onClick={testAudioOutput}
-                  className="flex items-center gap-1.5 text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer"
-                >
-                  <Volume2 className="w-3.5 h-3.5" />
-                  <span>Test Speaker</span>
-                </button>
-              </div>
-
+            <div className="p-4 rounded-2xl bg-slate-900 border border-white/10 space-y-3 text-xs animate-in fade-in duration-200">
+              <span className="font-bold text-white block pb-1 border-b border-white/10">Audio & Video Devices</span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="text-slate-400">Microphone</label>
+                  <label className="text-slate-400 font-medium">Microphone</label>
                   <select
                     value={selectedAudioInput}
                     onChange={e => setSelectedAudioInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-slate-200 focus:outline-none"
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white text-xs focus:outline-none"
                   >
                     {devices.audioInputs.map(d => (
                       <option key={d.deviceId} value={d.deviceId}>
@@ -240,11 +238,11 @@ export const PreJoinScreen: React.FC = () => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-slate-400">Camera</label>
+                  <label className="text-slate-400 font-medium">Camera</label>
                   <select
                     value={selectedVideoInput}
                     onChange={e => setSelectedVideoInput(e.target.value)}
-                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-2.5 py-1.5 text-slate-200 focus:outline-none"
+                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-white text-xs focus:outline-none"
                   >
                     {devices.videoInputs.map(d => (
                       <option key={d.deviceId} value={d.deviceId}>
@@ -254,29 +252,43 @@ export const PreJoinScreen: React.FC = () => {
                   </select>
                 </div>
               </div>
+
+              <div className="pt-1 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={testAudioOutput}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs transition-colors cursor-pointer"
+                >
+                  <Volume2 className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Test Speaker Tone</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowDeviceSettings(false)}
+                  className="text-slate-400 hover:text-white cursor-pointer"
+                >
+                  Done
+                </button>
+              </div>
             </div>
           )}
         </div>
 
-        {/* Right: Meeting Join Details */}
+        {/* Right: Meeting Info & Join Box */}
         <div className="lg:col-span-5 space-y-6">
-          <button
-            type="button"
-            onClick={leaveCall}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Dashboard</span>
-          </button>
-
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold text-white tracking-tight">
-              {meetingDoc?.title || 'Ready to join?'}
+          <div>
+            <button
+              onClick={leaveCall}
+              className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors mb-3 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back to home</span>
+            </button>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Ready to join?
             </h2>
-            <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="font-mono px-2 py-0.5 rounded bg-white/5 border border-white/10 text-indigo-300 font-semibold">
-                {meetingId}
-              </span>
+            <div className="flex items-center gap-2 mt-2 text-xs text-slate-400 font-mono">
+              <span className="text-slate-300 font-medium">{meetingId || 'Direct Room'}</span>
               <span>•</span>
               <button
                 type="button"
@@ -316,7 +328,6 @@ export const PreJoinScreen: React.FC = () => {
                 value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
                 placeholder="Enter your name to join"
-                required
                 autoFocus
                 className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
               />
@@ -336,13 +347,13 @@ export const PreJoinScreen: React.FC = () => {
             <div className="pt-2">
               <button
                 type="submit"
-                disabled={isJoining || !displayName.trim()}
-                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-semibold shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+                disabled={isJoining}
+                className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white rounded-xl font-semibold shadow-lg shadow-indigo-600/30 transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isJoining ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Joining room...</span>
+                    <span>Connecting to room...</span>
                   </>
                 ) : (
                   <span>Join Meeting</span>
