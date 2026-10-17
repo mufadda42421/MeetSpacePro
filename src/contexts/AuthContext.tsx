@@ -1,116 +1,126 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, onAuthStateChanged } from 'firebase/auth';
-import { auth, signInWithGoogle, signOutUser } from '../lib/firebase';
-import { getUserProfile, saveUserProfile, getUserPreferences, saveUserPreferences } from '../lib/firestoreService';
+import { getAuth, signInAnonymously } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import type { UserProfile, UserPreferences } from '../types';
 
+export interface AuthUser {
+  uid: string;
+  displayName: string;
+  email?: string;
+  photoURL?: string;
+}
+
 interface AuthContextType {
-  user: User | null;
-  profile: UserProfile | null;
-  preferences: UserPreferences | null;
-  loading: boolean;
-  signIn: () => Promise<void>;
-  signOut: () => Promise<void>;
-  updatePreferences: (prefs: Partial<UserPreferences>) => Promise<void>;
+  userName: string;
+  userId: string;
+  rememberMe: boolean;
+  profile: UserProfile;
+  preferences: UserPreferences;
+  user: AuthUser;
+  saveName: (name: string, remember: boolean) => void;
+  updatePreferences: (prefs: Partial<UserPreferences>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        try {
-          // Fetch or initialize user profile
-          let existingProfile = await getUserProfile(currentUser.uid);
-          if (!existingProfile) {
-            existingProfile = {
-              uid: currentUser.uid,
-              displayName: currentUser.displayName || currentUser.email?.split('@')[0] || 'User',
-              photoURL: currentUser.photoURL || '',
-              email: currentUser.email || '',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            };
-            await saveUserProfile(existingProfile);
-          }
-          setProfile(existingProfile);
-
-          // Fetch or initialize user preferences
-          let existingPrefs = await getUserPreferences(currentUser.uid);
-          if (!existingPrefs) {
-            existingPrefs = {
-              uid: currentUser.uid,
-              email: currentUser.email || '',
-              theme: 'dark',
-              mirrorVideo: true,
-              noiseSuppression: true,
-              captionsEnabled: false,
-              updatedAt: new Date().toISOString(),
-            };
-            await saveUserPreferences(existingPrefs);
-          }
-          setPreferences(existingPrefs);
-        } catch (error) {
-          console.error('Error synchronizing user profile:', error);
-        }
-      } else {
-        setProfile(null);
-        setPreferences(null);
-      }
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const handleSignIn = async () => {
-    try {
-      await signInWithGoogle();
-    } catch (err) {
-      console.error('Sign-in failed:', err);
+  // Load stored user id or create a persistent local identifier
+  const [userId, setUserId] = useState<string>(() => {
+    let id = localStorage.getItem('meetspace_user_id');
+    if (!id) {
+      id = `usr_${Math.random().toString(36).substring(2, 10)}`;
+      localStorage.setItem('meetspace_user_id', id);
     }
-  };
+    return id;
+  });
 
-  const handleSignOut = async () => {
-    try {
-      await signOutUser();
-    } catch (err) {
-      console.error('Sign-out failed:', err);
-    }
-  };
+  // Remember me setting (defaults to true)
+  const [rememberMe, setRememberMe] = useState<boolean>(() => {
+    const stored = localStorage.getItem('meetspace_remember_me');
+    return stored === null ? true : stored === 'true';
+  });
 
-  const handleUpdatePreferences = async (newPrefs: Partial<UserPreferences>) => {
-    if (!user || !preferences) return;
-    const updated: UserPreferences = {
-      ...preferences,
-      ...newPrefs,
+  // User display name from localStorage if remembered
+  const [userName, setUserName] = useState<string>(() => {
+    return localStorage.getItem('meetspace_user_name') || '';
+  });
+
+  // User preferences
+  const [preferences, setPreferences] = useState<UserPreferences>(() => {
+    return {
+      uid: userId,
+      theme: 'dark',
+      mirrorVideo: true,
+      noiseSuppression: true,
+      captionsEnabled: false,
       updatedAt: new Date().toISOString(),
     };
-    setPreferences(updated);
-    try {
-      await saveUserPreferences(updated);
-    } catch (err) {
-      console.error('Failed to save preferences:', err);
+  });
+
+  // Silent anonymous authentication in background for Firebase Firestore compliance
+  useEffect(() => {
+    if (auth) {
+      signInAnonymously(auth)
+        .then((cred) => {
+          if (cred?.user?.uid) {
+            setUserId(cred.user.uid);
+            localStorage.setItem('meetspace_user_id', cred.user.uid);
+          }
+        })
+        .catch((err) => {
+          // Non-blocking fallback; local storage and memory remain fully operational
+          console.warn('Anonymous auth note (app works fully offline/locally):', err?.message);
+        });
     }
+  }, []);
+
+  const saveName = (name: string, remember: boolean) => {
+    const trimmed = name.trim();
+    setUserName(trimmed);
+    setRememberMe(remember);
+
+    if (remember) {
+      localStorage.setItem('meetspace_user_name', trimmed);
+      localStorage.setItem('meetspace_remember_me', 'true');
+    } else {
+      localStorage.removeItem('meetspace_user_name');
+      localStorage.setItem('meetspace_remember_me', 'false');
+    }
+  };
+
+  const updatePreferences = (newPrefs: Partial<UserPreferences>) => {
+    setPreferences(prev => ({
+      ...prev,
+      ...newPrefs,
+      updatedAt: new Date().toISOString(),
+    }));
+  };
+
+  const profile: UserProfile = {
+    uid: userId,
+    displayName: userName || 'Participant',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const user: AuthUser = {
+    uid: userId,
+    displayName: userName || 'Participant',
+    email: '',
+    photoURL: '',
   };
 
   return (
     <AuthContext.Provider
       value={{
-        user,
+        userName,
+        userId,
+        rememberMe,
         profile,
         preferences,
-        loading,
-        signIn: handleSignIn,
-        signOut: handleSignOut,
-        updatePreferences: handleUpdatePreferences,
+        user,
+        saveName,
+        updatePreferences,
       }}
     >
       {children}

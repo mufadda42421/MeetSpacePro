@@ -192,8 +192,19 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const prepareMeeting = async (targetMeetingId?: string, isCreating: boolean = false, title: string = 'MeetSpace Session') => {
     setErrorMessage(null);
     let mid = targetMeetingId;
+    if (mid) {
+      if (mid.includes('meeting=')) {
+        mid = mid.split('meeting=')[1].split('&')[0];
+      } else if (mid.includes('/meeting/')) {
+        mid = mid.split('/meeting/')[1].split('?')[0];
+      } else if (mid.includes('/')) {
+        mid = mid.split('/').pop() || mid;
+      }
+      mid = decodeURIComponent(mid).replace(/[?#].*$/, '').trim().toLowerCase();
+    }
+
     if (isCreating || !mid) {
-      // Generate unguessable 9-character meeting code format: xxx-yyyy-zzz
+      // Generate clean 9-character meeting code format: xxx-yyyy-zzz
       const p1 = Math.random().toString(36).substring(2, 5);
       const p2 = Math.random().toString(36).substring(2, 6);
       const p3 = Math.random().toString(36).substring(2, 5);
@@ -216,13 +227,11 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (user) {
           await createMeetingDoc(newMeetingDoc);
         }
-        setMeetingDoc(newMeetingDoc);
-        setIsHost(true);
       } catch (err) {
         console.warn('Could not persist meeting doc to firestore, proceeding in memory:', err);
-        setMeetingDoc(newMeetingDoc);
-        setIsHost(true);
       }
+      setMeetingDoc(newMeetingDoc);
+      setIsHost(true);
     } else {
       try {
         let existing: MeetingDoc | null = null;
@@ -233,7 +242,7 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setMeetingDoc(existing);
           setIsHost(user ? existing.hostId === user.uid : false);
         } else {
-          // Allow joining ad-hoc code even if doc hasn't been fetched
+          // Allow joining ad-hoc code so anyone with the link/code connects immediately
           const adHocDoc: MeetingDoc = {
             meetingId: mid,
             title: `Meeting ${mid}`,
@@ -264,6 +273,12 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
+    // Sync meeting code to browser URL bar so copying address bar or refreshing keeps user in this room
+    if (typeof window !== 'undefined' && mid) {
+      const newUrl = `${window.location.pathname}?meeting=${encodeURIComponent(mid)}`;
+      window.history.replaceState({ meetingId: mid }, '', newUrl);
+    }
+
     setMeetingId(mid);
     setMeetingState('prejoin');
     await setupLocalMedia();
@@ -274,11 +289,8 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!meetingId) return;
     if (guestName) guestNameRef.current = guestName;
 
-    const myName = profile?.displayName || user?.displayName || guestName || guestNameRef.current || 'Participant';
-    const myId = user?.uid || `guest-${Math.random().toString(36).substring(2, 8)}`;
-
-    // Transition immediately to in-call so the user enters the room without delay
-    setMeetingState('in-call');
+    const myName = guestName || guestNameRef.current || profile?.displayName || user?.displayName || 'Participant';
+    const myId = user?.uid || `usr_${Math.random().toString(36).substring(2, 8)}`;
 
     // Set up WebRTC Manager
     const rtc = new WebRTCManager({
@@ -377,6 +389,10 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
         setMeetingState('in-call');
       },
+      onJoinError: (err) => {
+        setMeetingState('prejoin');
+        setErrorMessage(err.message || 'Unable to join meeting room.');
+      },
     });
 
     webrtcRef.current = rtc;
@@ -422,6 +438,10 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
   };
 
   const leaveCall = () => {
+    // Clear URL query param on leave
+    if (typeof window !== 'undefined') {
+      window.history.replaceState(null, '', window.location.pathname);
+    }
     if (chatUnsubscribeRef.current) {
       chatUnsubscribeRef.current();
       chatUnsubscribeRef.current = null;
@@ -442,6 +462,9 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       webrtcRef.current.disconnect();
       webrtcRef.current = null;
     }
+
+    setMeetingId(null);
+    setMeetingState('idle');
 
     setRemoteParticipants([]);
     setCaptions([]);

@@ -186,12 +186,30 @@ export async function getScheduledMeetings(userId: string): Promise<ScheduledMee
     snap.forEach(d => items.push(d.data() as ScheduledMeetingItem));
     return items.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, path);
+    console.warn('Firestore getScheduledMeetings failed, loading local items:', error);
+    try {
+      const local = localStorage.getItem(`meetspace_scheduled_${userId}`) || '[]';
+      const items: ScheduledMeetingItem[] = JSON.parse(local);
+      return items.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    } catch {
+      return [];
+    }
   }
 }
 
 export async function saveScheduledMeeting(userId: string, meeting: ScheduledMeetingItem): Promise<void> {
   const path = `users/${userId}/scheduledMeetings/${meeting.id}`;
+  // Save locally first
+  try {
+    const local = localStorage.getItem(`meetspace_scheduled_${userId}`) || '[]';
+    const items: ScheduledMeetingItem[] = JSON.parse(local);
+    const filtered = items.filter(m => m.id !== meeting.id);
+    filtered.push(meeting);
+    localStorage.setItem(`meetspace_scheduled_${userId}`, JSON.stringify(filtered));
+  } catch (e) {
+    console.warn('Local save error:', e);
+  }
+
   try {
     await setDoc(doc(db, 'users', userId, 'scheduledMeetings', meeting.id), {
       id: meeting.id,
@@ -205,16 +223,25 @@ export async function saveScheduledMeeting(userId: string, meeting: ScheduledMee
       createdAt: meeting.createdAt,
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    console.warn('Firestore saveScheduledMeeting note:', error);
   }
 }
 
 export async function deleteScheduledMeeting(userId: string, meetingId: string): Promise<void> {
   const path = `users/${userId}/scheduledMeetings/${meetingId}`;
   try {
+    const local = localStorage.getItem(`meetspace_scheduled_${userId}`) || '[]';
+    const items: ScheduledMeetingItem[] = JSON.parse(local);
+    const filtered = items.filter(m => m.id !== meetingId);
+    localStorage.setItem(`meetspace_scheduled_${userId}`, JSON.stringify(filtered));
+  } catch (e) {
+    console.warn('Local delete error:', e);
+  }
+
+  try {
     await deleteDoc(doc(db, 'users', userId, 'scheduledMeetings', meetingId));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    console.warn('Firestore deleteScheduledMeeting note:', error);
   }
 }
 
@@ -229,12 +256,28 @@ export async function getUserContacts(userId: string): Promise<ContactItem[]> {
     snap.forEach(d => items.push(d.data() as ContactItem));
     return items;
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, path);
+    console.warn('Firestore getUserContacts failed, loading local items:', error);
+    try {
+      const local = localStorage.getItem(`meetspace_contacts_${userId}`) || '[]';
+      return JSON.parse(local);
+    } catch {
+      return [];
+    }
   }
 }
 
 export async function saveUserContact(userId: string, contact: ContactItem): Promise<void> {
   const path = `users/${userId}/contacts/${contact.id}`;
+  try {
+    const local = localStorage.getItem(`meetspace_contacts_${userId}`) || '[]';
+    const items: ContactItem[] = JSON.parse(local);
+    const filtered = items.filter(c => c.id !== contact.id);
+    filtered.push(contact);
+    localStorage.setItem(`meetspace_contacts_${userId}`, JSON.stringify(filtered));
+  } catch (e) {
+    console.warn('Local save contact error:', e);
+  }
+
   try {
     await setDoc(doc(db, 'users', userId, 'contacts', contact.id), {
       id: contact.id,
@@ -244,15 +287,24 @@ export async function saveUserContact(userId: string, contact: ContactItem): Pro
       createdAt: contact.createdAt,
     });
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, path);
+    console.warn('Firestore saveUserContact note:', error);
   }
 }
 
 export async function deleteUserContact(userId: string, contactId: string): Promise<void> {
   const path = `users/${userId}/contacts/${contactId}`;
   try {
+    const local = localStorage.getItem(`meetspace_contacts_${userId}`) || '[]';
+    const items: ContactItem[] = JSON.parse(local);
+    const filtered = items.filter(c => c.id !== contactId);
+    localStorage.setItem(`meetspace_contacts_${userId}`, JSON.stringify(filtered));
+  } catch (e) {
+    console.warn('Local delete contact error:', e);
+  }
+
+  try {
     await deleteDoc(doc(db, 'users', userId, 'contacts', contactId));
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, path);
+    console.warn('Firestore deleteUserContact note:', error);
   }
 }
