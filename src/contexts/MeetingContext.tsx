@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { WebRTCManager } from '../lib/webrtc';
-import { LiveTranscriptionService, fetchMeetingSummary } from '../lib/transcription';
 import {
   getMeeting,
   createMeetingDoc,
@@ -11,12 +10,11 @@ import {
 import type {
   Participant,
   ChatMessage,
-  LiveCaption,
   MeetingReaction,
   MeetingDoc,
-  MeetingSummaryResult,
 } from '../types';
 import { useAuth } from './AuthContext';
+import { normalizeMeetingCode, formatMeetingDisplayCode } from '../lib/meetingUtils';
 
 export type MeetingState = 'idle' | 'prejoin' | 'waiting' | 'in-call' | 'ended';
 
@@ -31,8 +29,6 @@ interface MeetingContextType {
   videoEnabled: boolean;
   screenSharing: boolean;
   handRaised: boolean;
-  captionsEnabled: boolean;
-  captions: LiveCaption[];
   messages: ChatMessage[];
   reactions: MeetingReaction[];
   waitingParticipants: Participant[];
@@ -47,8 +43,6 @@ interface MeetingContextType {
   selectedAudioInput: string;
   selectedVideoInput: string;
   selectedAudioOutput: string;
-  isSummarizing: boolean;
-  meetingSummary: MeetingSummaryResult | null;
   errorMessage: string | null;
 
   // Actions
@@ -59,162 +53,147 @@ interface MeetingContextType {
   toggleVideo: () => void;
   toggleScreenShare: () => Promise<void>;
   toggleHandRaise: () => void;
-  toggleCaptions: () => void;
   sendReaction: (emoji: string) => void;
   sendMessage: (text: string, attachmentName?: string, attachmentUrl?: string) => Promise<void>;
   setSelectedAudioInput: (deviceId: string) => void;
   setSelectedVideoInput: (deviceId: string) => void;
   setSelectedAudioOutput: (deviceId: string) => void;
   testAudioOutput: () => void;
-  generateSummary: () => Promise<void>;
   clearErrorMessage: () => void;
-
-  // Host Controls
-  hostAdmit: (targetSocketId: string) => void;
-  hostDeny: (targetSocketId: string) => void;
-  hostMute: (targetSocketId: string) => void;
-  hostKick: (targetSocketId: string) => void;
-  hostToggleLock: () => void;
+  hostAdmit: (socketId: string) => void;
+  hostDeny: (socketId: string) => void;
+  hostMute: (socketId: string) => void;
+  hostKick: (socketId: string) => void;
+  hostToggleLock: (locked: boolean) => void;
   hostEndMeeting: () => void;
 }
 
-const MeetingContext = createContext<MeetingContextType | undefined>(undefined);
+const MeetingContext = createContext<MeetingContextType | null>(null);
 
 export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, profile } = useAuth();
+  const { user, profile, userName } = useAuth();
 
   const [meetingState, setMeetingState] = useState<MeetingState>('idle');
   const [meetingId, setMeetingId] = useState<string | null>(null);
   const [meetingDoc, setMeetingDoc] = useState<MeetingDoc | null>(null);
   const [isHost, setIsHost] = useState<boolean>(false);
+  const [isLocked, setIsLocked] = useState<boolean>(false);
 
+  // Local media tracks & preferences
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const [remoteParticipants, setRemoteParticipants] = useState<Participant[]>([]);
   const [audioEnabled, setAudioEnabled] = useState<boolean>(true);
   const [videoEnabled, setVideoEnabled] = useState<boolean>(true);
   const [screenSharing, setScreenSharing] = useState<boolean>(false);
   const [handRaised, setHandRaised] = useState<boolean>(false);
-  const [captionsEnabled, setCaptionsEnabled] = useState<boolean>(false);
 
-  const [captions, setCaptions] = useState<LiveCaption[]>([]);
+  // Room participants & communication
+  const [remoteParticipants, setRemoteParticipants] = useState<Participant[]>([]);
+  const [waitingParticipants, setWaitingParticipants] = useState<Participant[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [reactions, setReactions] = useState<MeetingReaction[]>([]);
-  const [waitingParticipants, setWaitingParticipants] = useState<Participant[]>([]);
-  const [isLocked, setIsLocked] = useState<boolean>(false);
-  const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
   const [unreadChatCount, setUnreadChatCount] = useState<number>(0);
+  const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Hardware devices
   const [devices, setDevices] = useState<{
     audioInputs: MediaDeviceInfo[];
     videoInputs: MediaDeviceInfo[];
     audioOutputs: MediaDeviceInfo[];
-  }>({ audioInputs: [], videoInputs: [], audioOutputs: [] });
-
+  }>({
+    audioInputs: [],
+    videoInputs: [],
+    audioOutputs: [],
+  });
   const [selectedAudioInput, setSelectedAudioInput] = useState<string>('');
   const [selectedVideoInput, setSelectedVideoInput] = useState<string>('');
   const [selectedAudioOutput, setSelectedAudioOutput] = useState<string>('');
 
-  const [isSummarizing, setIsSummarizing] = useState<boolean>(false);
-  const [meetingSummary, setMeetingSummary] = useState<MeetingSummaryResult | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
+  // Refs
   const webrtcRef = useRef<WebRTCManager | null>(null);
-  const transcriberRef = useRef<LiveTranscriptionService | null>(null);
   const screenTrackRef = useRef<MediaStreamTrack | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const chatUnsubscribeRef = useRef<(() => void) | null>(null);
   const guestNameRef = useRef<string>('');
+  const chatUnsubscribeRef = useRef<(() => void) | null>(null);
 
   // Enumerate hardware devices
-  const refreshDevices = useCallback(async () => {
+  const enumerateDevices = useCallback(async () => {
     try {
-      const devList = await navigator.mediaDevices.enumerateDevices();
-      const aIn = devList.filter(d => d.kind === 'audioinput');
-      const vIn = devList.filter(d => d.kind === 'videoinput');
-      const aOut = devList.filter(d => d.kind === 'audiooutput');
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      const allDevices = await navigator.mediaDevices.enumerateDevices();
+      const audioIns = allDevices.filter(d => d.kind === 'audioinput');
+      const videoIns = allDevices.filter(d => d.kind === 'videoinput');
+      const audioOuts = allDevices.filter(d => d.kind === 'audiooutput');
 
-      setDevices({ audioInputs: aIn, videoInputs: vIn, audioOutputs: aOut });
-      if (aIn.length && !selectedAudioInput) setSelectedAudioInput(aIn[0].deviceId);
-      if (vIn.length && !selectedVideoInput) setSelectedVideoInput(vIn[0].deviceId);
-      if (aOut.length && !selectedAudioOutput) setSelectedAudioOutput(aOut[0].deviceId);
+      setDevices({
+        audioInputs: audioIns,
+        videoInputs: videoIns,
+        audioOutputs: audioOuts,
+      });
+
+      if (audioIns.length && !selectedAudioInput) setSelectedAudioInput(audioIns[0].deviceId);
+      if (videoIns.length && !selectedVideoInput) setSelectedVideoInput(videoIns[0].deviceId);
+      if (audioOuts.length && !selectedAudioOutput) setSelectedAudioOutput(audioOuts[0].deviceId);
     } catch (err) {
-      console.warn('Device enumeration error:', err);
+      console.warn('Device enumeration failed:', err);
     }
   }, [selectedAudioInput, selectedVideoInput, selectedAudioOutput]);
 
   useEffect(() => {
-    refreshDevices();
-    navigator.mediaDevices?.addEventListener('devicechange', refreshDevices);
+    enumerateDevices();
+    navigator.mediaDevices?.addEventListener('devicechange', enumerateDevices);
     return () => {
-      navigator.mediaDevices?.removeEventListener('devicechange', refreshDevices);
+      navigator.mediaDevices?.removeEventListener('devicechange', enumerateDevices);
     };
-  }, [refreshDevices]);
+  }, [enumerateDevices]);
 
-  // Request or update local media stream
-  const setupLocalMedia = useCallback(async (audioDevId?: string, videoDevId?: string) => {
+  // Setup local preview media
+  const setupLocalMedia = async () => {
     try {
       if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
       }
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: audioDevId ? { deviceId: { exact: audioDevId }, echoCancellation: true, noiseSuppression: true } : true,
-        video: videoDevId ? { deviceId: { exact: videoDevId }, width: { ideal: 1280 }, height: { ideal: 720 } } : true,
+        audio: selectedAudioInput ? { deviceId: { exact: selectedAudioInput } } : true,
+        video: selectedVideoInput ? { deviceId: { exact: selectedVideoInput }, width: 1280, height: 720 } : true,
       });
-
-      // Apply initial mute states
-      stream.getAudioTracks().forEach(t => (t.enabled = audioEnabled));
-      stream.getVideoTracks().forEach(t => (t.enabled = videoEnabled));
-
       setLocalStream(stream);
-      if (webrtcRef.current) {
-        webrtcRef.current.setLocalStream(stream);
-      }
-      await refreshDevices();
+      setAudioEnabled(true);
+      setVideoEnabled(true);
       return stream;
-    } catch (err: any) {
-      console.warn('Local media access denied or partial:', err);
-      // Fallback: try audio only if video failed
+    } catch (err) {
+      console.warn('Camera/Mic permission denied or unavailable:', err);
       try {
-        const audioOnlyStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioOnlyStream.getAudioTracks().forEach(t => (t.enabled = audioEnabled));
-        setLocalStream(audioOnlyStream);
+        const audioOnly = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        setLocalStream(audioOnly);
+        setAudioEnabled(true);
         setVideoEnabled(false);
-        if (webrtcRef.current) webrtcRef.current.setLocalStream(audioOnlyStream);
-        return audioOnlyStream;
+        return audioOnly;
       } catch (audioErr) {
-        setErrorMessage('Camera and microphone access could not be granted. You can still join as a viewer.');
+        console.warn('Microphone permission denied as well:', audioErr);
+        setAudioEnabled(false);
+        setVideoEnabled(false);
         return null;
       }
     }
-  }, [localStream, audioEnabled, videoEnabled, refreshDevices]);
+  };
 
   // Prepare a meeting (either create fresh or join existing code)
   const prepareMeeting = async (targetMeetingId?: string, isCreating: boolean = false, title: string = 'MeetSpace Session') => {
     setErrorMessage(null);
-    let mid = targetMeetingId;
-    if (mid) {
-      if (mid.includes('meeting=')) {
-        mid = mid.split('meeting=')[1].split('&')[0];
-      } else if (mid.includes('/meeting/')) {
-        mid = mid.split('/meeting/')[1].split('?')[0];
-      } else if (mid.includes('/')) {
-        mid = mid.split('/').pop() || mid;
-      }
-      mid = decodeURIComponent(mid).replace(/[?#].*$/, '').trim().toLowerCase();
-    }
+    let mid = targetMeetingId ? normalizeMeetingCode(targetMeetingId) : '';
 
     if (isCreating || !mid) {
-      // Generate clean 9-character meeting code format: xxx-yyyy-zzz
+      // Generate clean standard meeting code formatted as xxx-yyyy-zzz
       const p1 = Math.random().toString(36).substring(2, 5);
       const p2 = Math.random().toString(36).substring(2, 6);
       const p3 = Math.random().toString(36).substring(2, 5);
       mid = `${p1}-${p2}-${p3}`;
 
-      const newMeetingDoc: MeetingDoc = {
+      const newDoc: MeetingDoc = {
         meetingId: mid,
-        title: title || 'MeetSpace Conference',
-        hostId: user?.uid || 'guest-host',
-        hostName: profile?.displayName || user?.displayName || 'Host',
+        title: title || 'MeetSpace Session',
+        hostId: user?.uid || `host_${Math.random().toString(36).substring(2, 8)}`,
+        hostName: userName || user?.displayName || 'Host',
         hostEmail: user?.email || '',
         status: 'active',
         isLocked: false,
@@ -224,19 +203,19 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       };
 
       try {
-        if (user) {
-          await createMeetingDoc(newMeetingDoc);
-        }
+        await createMeetingDoc(newDoc);
       } catch (err) {
-        console.warn('Could not persist meeting doc to firestore, proceeding in memory:', err);
+        console.warn('Using ad-hoc room without cloud persistence:', err);
       }
-      setMeetingDoc(newMeetingDoc);
+      setMeetingDoc(newDoc);
       setIsHost(true);
     } else {
+      mid = formatMeetingDisplayCode(mid);
       try {
-        let existing: MeetingDoc | null = null;
-        if (user) {
-          existing = await getMeeting(mid);
+        let existing = await getMeeting(mid);
+        if (!existing) {
+          const rawId = mid.replace(/-/g, '');
+          existing = await getMeeting(rawId);
         }
         if (existing) {
           setMeetingDoc(existing);
@@ -257,7 +236,7 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setIsHost(false);
         }
       } catch (err) {
-        console.warn('Error reading meeting, creating ad-hoc session:', err);
+        console.warn('Using ad-hoc session:', err);
         const adHocDoc: MeetingDoc = {
           meetingId: mid,
           title: `Meeting ${mid}`,
@@ -273,7 +252,7 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }
     }
 
-    // Sync meeting code to browser URL bar so copying address bar or refreshing keeps user in this room
+    // Sync meeting code to browser URL bar
     if (typeof window !== 'undefined' && mid) {
       const newUrl = `${window.location.pathname}?meeting=${encodeURIComponent(mid)}`;
       window.history.replaceState({ meetingId: mid }, '', newUrl);
@@ -284,13 +263,17 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await setupLocalMedia();
   };
 
-  // Join the actual call after device check
+  // Join the actual call after device check - opens meeting room immediately
   const joinCall = async (guestName?: string) => {
     if (!meetingId) return;
     if (guestName) guestNameRef.current = guestName;
 
-    const myName = guestName || guestNameRef.current || profile?.displayName || user?.displayName || 'Participant';
+    const myName = guestName || guestNameRef.current || userName || profile?.displayName || user?.displayName || 'Participant';
     const myId = user?.uid || `usr_${Math.random().toString(36).substring(2, 8)}`;
+
+    // Immediately open meeting room interface so screen changes without any stall
+    setMeetingState('in-call');
+    setErrorMessage(null);
 
     // Set up WebRTC Manager
     const rtc = new WebRTCManager({
@@ -329,7 +312,6 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       },
       onReactionReceived: (reaction) => {
         setReactions(prev => [...prev.slice(-20), reaction]);
-        // Auto-remove reaction after 2.5s
         setTimeout(() => {
           setReactions(prev => prev.filter(r => r.id !== reaction.id));
         }, 2500);
@@ -340,9 +322,6 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           return [...prev, msg];
         });
         setUnreadChatCount(c => c + 1);
-      },
-      onLiveCaptionReceived: (caption) => {
-        setCaptions(prev => [...prev.slice(-30), caption]);
       },
       onWaitingRoomEntered: () => {
         setMeetingState('waiting');
@@ -387,7 +366,6 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (data.existingParticipants && Array.isArray(data.existingParticipants)) {
           setRemoteParticipants(data.existingParticipants);
         }
-        setMeetingState('in-call');
       },
       onJoinError: (err) => {
         setMeetingState('prejoin');
@@ -412,7 +390,7 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
       isHost,
     });
 
-    // Subscribe to Firestore chat ONLY if user is authenticated to adhere to security rules
+    // Optional Firestore chat synchronization
     if (user) {
       try {
         if (chatUnsubscribeRef.current) {
@@ -422,99 +400,83 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
           setMessages(msgs);
         });
       } catch (err) {
-        console.warn('Firestore chat listener error:', err);
+        console.warn('Firestore chat listener fallback:', err);
       }
-    }
-
-    // Initialize Gemini 3.5 live transcription service
-    transcriberRef.current = new LiveTranscriptionService(myName, myId, caption => {
-      setCaptions(prev => [...prev.slice(-30), caption]);
-      webrtcRef.current?.sendLiveCaption(caption);
-    });
-
-    if (captionsEnabled && localStream && audioEnabled) {
-      transcriberRef.current.start(localStream);
     }
   };
 
+  // Leave active call
   const leaveCall = () => {
-    // Clear URL query param on leave
-    if (typeof window !== 'undefined') {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
     if (chatUnsubscribeRef.current) {
       chatUnsubscribeRef.current();
       chatUnsubscribeRef.current = null;
     }
-    if (transcriberRef.current) {
-      transcriberRef.current.stop();
-      transcriberRef.current = null;
-    }
+
     if (screenTrackRef.current) {
       screenTrackRef.current.stop();
       screenTrackRef.current = null;
     }
+
     if (localStream) {
       localStream.getTracks().forEach(t => t.stop());
       setLocalStream(null);
     }
+
     if (webrtcRef.current) {
       webrtcRef.current.disconnect();
       webrtcRef.current = null;
     }
 
-    setMeetingId(null);
-    setMeetingState('idle');
+    // Clear meeting query parameter in URL bar
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
 
     setRemoteParticipants([]);
-    setCaptions([]);
-    setMessages([]);
     setWaitingParticipants([]);
+    setMessages([]);
+    setReactions([]);
     setScreenSharing(false);
     setHandRaised(false);
-    setMeetingState('ended');
+    setMeetingState('idle');
+    setMeetingId(null);
+    setMeetingDoc(null);
+    setIsHost(false);
+    setErrorMessage(null);
   };
 
   const toggleAudio = () => {
+    if (!localStream) return;
     const nextState = !audioEnabled;
+    localStream.getAudioTracks().forEach(track => {
+      track.enabled = nextState;
+    });
     setAudioEnabled(nextState);
-    if (localStream) {
-      localStream.getAudioTracks().forEach(t => (t.enabled = nextState));
-    }
     webrtcRef.current?.updateMediaState({ audioEnabled: nextState });
-
-    // Handle live transcriber audio feed
-    if (transcriberRef.current) {
-      if (nextState && captionsEnabled && localStream) {
-        transcriberRef.current.start(localStream);
-      } else {
-        transcriberRef.current.stop();
-      }
-    }
   };
 
   const toggleVideo = () => {
+    if (!localStream) return;
     const nextState = !videoEnabled;
+    localStream.getVideoTracks().forEach(track => {
+      track.enabled = nextState;
+    });
     setVideoEnabled(nextState);
-    if (localStream) {
-      localStream.getVideoTracks().forEach(t => (t.enabled = nextState));
-    }
     webrtcRef.current?.updateMediaState({ videoEnabled: nextState });
   };
 
   const toggleScreenShare = async () => {
     if (screenSharing) {
-      // Stop screen share -> switch back to camera track
       if (screenTrackRef.current) {
         screenTrackRef.current.stop();
         screenTrackRef.current = null;
       }
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0] || null;
+        await webrtcRef.current?.replaceVideoTrack(videoTrack);
+      }
       setScreenSharing(false);
       webrtcRef.current?.updateMediaState({ screenSharing: false });
-
-      // Restore camera video track
-      const cameraTrack = localStream?.getVideoTracks()[0] || null;
-      await webrtcRef.current?.replaceVideoTrack(cameraTrack);
     } else {
       try {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
@@ -524,16 +486,20 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const screenTrack = displayStream.getVideoTracks()[0];
         screenTrackRef.current = screenTrack;
 
-        screenTrack.onended = () => {
-          // Triggered when user clicks browser's "Stop Sharing" floating pill
-          toggleScreenShare();
-        };
-
+        await webrtcRef.current?.replaceVideoTrack(screenTrack);
         setScreenSharing(true);
         webrtcRef.current?.updateMediaState({ screenSharing: true });
-        await webrtcRef.current?.replaceVideoTrack(screenTrack);
+
+        screenTrack.onended = () => {
+          if (localStream) {
+            const videoTrack = localStream.getVideoTracks()[0] || null;
+            webrtcRef.current?.replaceVideoTrack(videoTrack);
+          }
+          setScreenSharing(false);
+          webrtcRef.current?.updateMediaState({ screenSharing: false });
+        };
       } catch (err) {
-        console.warn('Screen sharing cancelled or denied:', err);
+        console.warn('Screen share cancelled or failed:', err);
       }
     }
   };
@@ -544,137 +510,109 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     webrtcRef.current?.toggleHandRaise(next);
   };
 
-  const toggleCaptions = () => {
-    const next = !captionsEnabled;
-    setCaptionsEnabled(next);
-
-    if (transcriberRef.current) {
-      if (next && localStream && audioEnabled) {
-        transcriberRef.current.start(localStream);
-      } else {
-        transcriberRef.current.stop();
-      }
-    }
-  };
-
   const sendReaction = (emoji: string) => {
+    const myName = guestNameRef.current || userName || profile?.displayName || user?.displayName || 'Participant';
+    const myId = user?.uid || 'guest';
+    const reaction: MeetingReaction = {
+      id: Math.random().toString(36).substring(2),
+      emoji,
+      senderName: myName,
+      senderId: myId,
+      timestamp: Date.now(),
+    };
+    setReactions(prev => [...prev.slice(-20), reaction]);
     webrtcRef.current?.sendReaction(emoji);
+    setTimeout(() => {
+      setReactions(prev => prev.filter(r => r.id !== reaction.id));
+    }, 2500);
   };
 
   const sendMessage = async (text: string, attachmentName?: string, attachmentUrl?: string) => {
-    if (!meetingId) return;
-    const myName = profile?.displayName || user?.displayName || guestNameRef.current || 'Participant';
-    const myId = user?.uid || `guest-${Math.random().toString(36).substring(2, 8)}`;
+    if (!text.trim() && !attachmentUrl) return;
+    const myName = guestNameRef.current || userName || profile?.displayName || user?.displayName || 'Participant';
+    const myId = user?.uid || 'guest';
 
-    const newMsg: ChatMessage = {
-      id: Math.random().toString(36).substring(2, 10),
-      meetingId,
+    const msg: ChatMessage = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      meetingId: meetingId || '',
       senderId: myId,
       senderName: myName,
-      senderPhoto: profile?.photoURL || user?.photoURL || '',
-      text,
+      senderPhoto: profile?.photoURL || user?.photoURL,
+      text: text.trim(),
       attachmentName,
       attachmentUrl,
       createdAt: new Date().toISOString(),
     };
 
-    // Optimistic local add
-    setMessages(prev => [...prev, newMsg]);
+    setMessages(prev => [...prev, msg]);
+    webrtcRef.current?.sendChatMessage({
+      text: text.trim(),
+      attachmentName,
+      attachmentUrl,
+    });
 
-    // Broadcast via Socket.IO for zero-latency peer sync
-    webrtcRef.current?.sendChatMessage(newMsg);
-
-    // Persist to Firestore if user is authenticated
-    if (user) {
+    if (user && meetingId) {
       try {
-        await saveMeetingMessage(newMsg);
+        await saveMeetingMessage(msg);
       } catch (err) {
-        console.warn('Error persisting chat message to firestore:', err);
+        console.warn('Firestore message save error:', err);
       }
     }
   };
 
-  // Host Actions
-  const hostAdmit = (targetSocketId: string) => {
-    webrtcRef.current?.hostAdmitParticipant(targetSocketId);
-    setWaitingParticipants(prev => prev.filter(p => p.socketId !== targetSocketId));
+  const testAudioOutput = () => {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, ctx.currentTime);
+      gain.gain.setValueAtTime(0.1, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (err) {
+      console.warn('Audio test error:', err);
+    }
   };
 
-  const hostDeny = (targetSocketId: string) => {
-    webrtcRef.current?.hostDenyParticipant(targetSocketId);
-    setWaitingParticipants(prev => prev.filter(p => p.socketId !== targetSocketId));
+  // Host operations
+  const hostAdmit = (socketId: string) => {
+    webrtcRef.current?.hostAdmitParticipant(socketId);
+    setWaitingParticipants(prev => prev.filter(p => p.socketId !== socketId));
   };
 
-  const hostMute = (targetSocketId: string) => {
-    webrtcRef.current?.hostMuteParticipant(targetSocketId);
+  const hostDeny = (socketId: string) => {
+    webrtcRef.current?.hostDenyParticipant(socketId);
+    setWaitingParticipants(prev => prev.filter(p => p.socketId !== socketId));
   };
 
-  const hostKick = (targetSocketId: string) => {
-    webrtcRef.current?.hostKickParticipant(targetSocketId);
+  const hostMute = (socketId: string) => {
+    webrtcRef.current?.hostMuteParticipant(socketId);
   };
 
-  const hostToggleLock = () => {
-    const next = !isLocked;
-    setIsLocked(next);
-    webrtcRef.current?.hostToggleLock(next);
+  const hostKick = (socketId: string) => {
+    webrtcRef.current?.hostKickParticipant(socketId);
+    setRemoteParticipants(prev => prev.filter(p => p.socketId !== socketId));
+  };
+
+  const hostToggleLock = async (locked: boolean) => {
+    setIsLocked(locked);
+    webrtcRef.current?.hostToggleLock(locked);
     if (meetingId && user) {
-      updateMeetingSettings(meetingId, { isLocked: next }).catch(console.warn);
+      try {
+        await updateMeetingSettings(meetingId, { isLocked: locked });
+      } catch (err) {
+        console.warn('Firestore update lock error:', err);
+      }
     }
   };
 
   const hostEndMeeting = () => {
     webrtcRef.current?.hostEndMeetingForAll();
     leaveCall();
-    if (meetingId && user) {
-      updateMeetingSettings(meetingId, { status: 'ended' }).catch(console.warn);
-    }
-  };
-
-  // Speaker audio test chime
-  const testAudioOutput = () => {
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(440, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.3);
-
-      gain.gain.setValueAtTime(0.2, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-
-      osc.start();
-      osc.stop(ctx.currentTime + 0.4);
-    } catch (err) {
-      console.warn('Audio test failed:', err);
-    }
-  };
-
-  // Generate meeting summary using Gemini 3.8
-  const generateSummary = async () => {
-    setIsSummarizing(true);
-    setErrorMessage(null);
-    try {
-      // Gather transcript text from live captions and chat
-      let transcriptText = captions.map(c => `${c.speakerName}: ${c.text}`).join('\n');
-      if (!transcriptText && messages.length) {
-        transcriptText = messages.map(m => `${m.senderName}: ${m.text}`).join('\n');
-      }
-      if (!transcriptText) {
-        transcriptText = 'General discussion on project updates, deliverables, architectural patterns, and action items.';
-      }
-
-      const summary = await fetchMeetingSummary(transcriptText);
-      setMeetingSummary(summary);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to generate meeting summary');
-    } finally {
-      setIsSummarizing(false);
-    }
   };
 
   const clearErrorMessage = () => setErrorMessage(null);
@@ -692,8 +630,6 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         videoEnabled,
         screenSharing,
         handRaised,
-        captionsEnabled,
-        captions,
         messages,
         reactions,
         waitingParticipants,
@@ -704,10 +640,7 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         selectedAudioInput,
         selectedVideoInput,
         selectedAudioOutput,
-        isSummarizing,
-        meetingSummary,
         errorMessage,
-
         prepareMeeting,
         joinCall,
         leaveCall,
@@ -715,16 +648,13 @@ export const MeetingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         toggleVideo,
         toggleScreenShare,
         toggleHandRaise,
-        toggleCaptions,
         sendReaction,
         sendMessage,
         setSelectedAudioInput,
         setSelectedVideoInput,
         setSelectedAudioOutput,
         testAudioOutput,
-        generateSummary,
         clearErrorMessage,
-
         hostAdmit,
         hostDeny,
         hostMute,

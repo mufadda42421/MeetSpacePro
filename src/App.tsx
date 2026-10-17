@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { AuthProvider } from './contexts/AuthContext';
 import { MeetingProvider, useMeeting } from './contexts/MeetingContext';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { PreJoinScreen } from './components/PreJoinScreen';
 import { MeetingRoom } from './components/MeetingRoom';
-import { SummaryModal } from './components/SummaryModal';
 import { ScheduleModal } from './components/ScheduleModal';
 import { ContactsModal } from './components/ContactsModal';
 import { SettingsModal } from './components/SettingsModal';
@@ -16,7 +15,6 @@ function MainApp() {
   const [showSchedule, setShowSchedule] = useState<boolean>(false);
   const [showContacts, setShowContacts] = useState<boolean>(false);
   const [showSettings, setShowSettings] = useState<boolean>(false);
-  const [showSummary, setShowSummary] = useState<boolean>(false);
 
   // Check URL query param ?meeting=code on load
   useEffect(() => {
@@ -41,7 +39,7 @@ function MainApp() {
       {/* Main View Router */}
       <main className="flex-1 flex flex-col">
         {meetingState === 'in-call' ? (
-          <MeetingRoom onOpenSummary={() => setShowSummary(true)} />
+          <MeetingRoom />
         ) : meetingState === 'prejoin' || meetingState === 'waiting' ? (
           <PreJoinScreen />
         ) : (
@@ -50,12 +48,11 @@ function MainApp() {
       </main>
 
       {/* Modals */}
-      {showSummary && <SummaryModal onClose={() => setShowSummary(false)} />}
       {showSchedule && (
         <ScheduleModal
           onClose={() => setShowSchedule(false)}
           onSaved={() => {
-            // Can refresh schedule
+            // Refreshed schedule
           }}
         />
       )}

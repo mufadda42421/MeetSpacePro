@@ -13,7 +13,6 @@ export interface UserPreferences {
   theme: 'dark' | 'light' | 'system';
   mirrorVideo: boolean;
   noiseSuppression: boolean;
-  captionsEnabled: boolean;
   updatedAt: string;
 }
 
@@ -78,25 +77,10 @@ export interface ChatMessage {
   createdAt: string;
 }
 
-export interface LiveCaption {
-  id: string;
-  speakerName: string;
-  speakerId: string;
-  text: string;
-  timestamp: number;
-  isFinal: boolean;
-}
-
 export interface MeetingReaction {
   id: string;
   emoji: string;
   senderName: string;
   senderId: string;
   timestamp: number;
-}
-
-export interface MeetingSummaryResult {
-  summary: string;
-  keyPoints: string[];
-  actionItems: string[];
 }

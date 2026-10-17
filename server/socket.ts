@@ -248,15 +248,6 @@ export function initSocketServer(httpServer: HttpServer): SocketIOServer {
       io.to(`room:${currentCanonicalMeetingId}`).emit('chat-message-received', msg);
     });
 
-    // Gemini Live Transcription Broadcast
-    socket.on('send-live-caption', (payload: { speakerName: string; speakerId: string; text: string; isFinal: boolean; timestamp: number }) => {
-      if (!currentCanonicalMeetingId) return;
-      const caption = {
-        id: `cap_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-        ...payload,
-      };
-      socket.to(`room:${currentCanonicalMeetingId}`).emit('live-caption-received', caption);
-    });
 
     // Host Action: Force Mute Participant
     socket.on('host-mute-participant', (payload: { targetSocketId: string }) => {

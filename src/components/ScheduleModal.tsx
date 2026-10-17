@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Calendar as CalendarIcon, Clock, Copy, Check, Download, Sparkles } from 'lucide-react';
+import { X, Calendar as CalendarIcon, Clock, Copy, Check, Download } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { saveScheduledMeeting } from '../lib/firestoreService';
 import type { ScheduledMeetingItem } from '../types';

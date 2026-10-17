@@ -74,7 +74,6 @@ export async function saveUserPreferences(prefs: UserPreferences): Promise<void>
       theme: prefs.theme,
       mirrorVideo: prefs.mirrorVideo,
       noiseSuppression: prefs.noiseSuppression,
-      captionsEnabled: prefs.captionsEnabled,
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {

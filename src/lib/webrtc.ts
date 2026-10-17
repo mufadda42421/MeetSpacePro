@@ -25,7 +25,6 @@ export interface WebRTCCallbacks {
   onHandStateChanged: (socketId: string, raised: boolean) => void;
   onReactionReceived: (reaction: any) => void;
   onChatMessageReceived: (message: any) => void;
-  onLiveCaptionReceived: (caption: any) => void;
   onWaitingRoomEntered?: (msg: string) => void;
   onWaitingParticipantArrived?: (p: Participant) => void;
   onAdmitted?: () => void;
@@ -64,14 +63,16 @@ export class WebRTCManager {
 
     this.socket.on('connect', () => {
       this.currentSocketId = this.socket?.id || '';
-      // If we previously joined a room, automatically re-join upon reconnection
-      if (this.lastJoinParams) {
-        this.socket?.emit('join-room', this.lastJoinParams);
+    });
+
+    this.socket.io.on('reconnect', () => {
+      if (this.lastJoinParams && this.socket?.connected) {
+        this.socket.emit('join-room', this.lastJoinParams);
       }
     });
 
     this.socket.on('connect_error', (err) => {
-      console.warn('Socket connection warning (will retry automatically):', err.message);
+      console.warn('Socket connection retry:', err.message);
     });
 
     // Room response
@@ -93,7 +94,6 @@ export class WebRTCManager {
     // New participant joined
     this.socket.on('participant-joined', async (participant: Participant) => {
       this.callbacks.onParticipantJoined(participant);
-      // Ensure peer connection container exists; joiner initiates offer
       await this.createPeerConnection(participant.socketId, false);
     });
 
@@ -138,7 +138,6 @@ export class WebRTCManager {
       if (pc) {
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-          // Flush any buffered ICE candidates for this peer
           const queued = this.iceCandidatesQueue.get(data.fromSocketId);
           if (queued && queued.length) {
             for (const cand of queued) {
@@ -163,27 +162,20 @@ export class WebRTCManager {
           console.warn('Error adding ICE candidate:', err);
         }
       } else {
-        // Buffer candidate until remote description is set
-        let queue = this.iceCandidatesQueue.get(data.fromSocketId);
-        if (!queue) {
-          queue = [];
-          this.iceCandidatesQueue.set(data.fromSocketId, queue);
-        }
-        queue.push(data.candidate);
+        // Queue candidate until remote description is set
+        const list = this.iceCandidatesQueue.get(data.fromSocketId) || [];
+        list.push(data.candidate);
+        this.iceCandidatesQueue.set(data.fromSocketId, list);
       }
     });
 
-    // Remote media changes
-    this.socket.on('participant-media-changed', (data) => {
-      this.callbacks.onMediaStateChanged(data.socketId, {
-        audioEnabled: data.audioEnabled,
-        videoEnabled: data.videoEnabled,
-        screenSharing: data.screenSharing,
-      });
+    // Media states
+    this.socket.on('participant-media-changed', (data: { socketId: string; audioEnabled: boolean; videoEnabled: boolean; screenSharing: boolean }) => {
+      this.callbacks.onMediaStateChanged(data.socketId, data);
     });
 
     // Hand raise
-    this.socket.on('participant-hand-changed', (data) => {
+    this.socket.on('participant-hand-raised', (data: { socketId: string; handRaised: boolean }) => {
       this.callbacks.onHandStateChanged(data.socketId, data.handRaised);
     });
 
@@ -195,11 +187,6 @@ export class WebRTCManager {
     // Chat message
     this.socket.on('chat-message-received', (msg) => {
       this.callbacks.onChatMessageReceived(msg);
-    });
-
-    // Live caption
-    this.socket.on('live-caption-received', (caption) => {
-      this.callbacks.onLiveCaptionReceived(caption);
     });
 
     // Host controls
@@ -280,16 +267,16 @@ export class WebRTCManager {
 
   public joinRoom(params: JoinRoomParams) {
     this.lastJoinParams = params;
-    if (!this.socket) this.connect();
+    const socket = this.connect();
 
     const emitJoin = () => {
-      this.socket?.emit('join-room', params);
+      socket.emit('join-room', params);
     };
 
-    if (this.socket?.connected) {
+    if (socket.connected) {
       emitJoin();
     } else {
-      this.socket?.once('connect', emitJoin);
+      socket.once('connect', emitJoin);
     }
   }
 
@@ -307,10 +294,6 @@ export class WebRTCManager {
 
   public sendChatMessage(message: any) {
     this.socket?.emit('send-chat-message', message);
-  }
-
-  public sendLiveCaption(caption: { speakerName: string; speakerId: string; text: string; isFinal: boolean; timestamp: number }) {
-    this.socket?.emit('send-live-caption', caption);
   }
 
   // Host operations
@@ -347,45 +330,39 @@ export class WebRTCManager {
     this.peerConnections.set(remoteSocketId, pc);
 
     // Add local tracks if available, or transceivers so remote media can be received
-    if (this.localStream && this.localStream.getTracks().length > 0) {
+    if (this.localStream) {
       this.localStream.getTracks().forEach((track) => {
-        try {
-          pc.addTrack(track, this.localStream!);
-        } catch (e) {
-          console.warn('Track add error:', e);
-        }
+        pc.addTrack(track, this.localStream!);
       });
     } else {
-      try {
-        pc.addTransceiver('audio', { direction: 'recvonly' });
-        pc.addTransceiver('video', { direction: 'recvonly' });
-      } catch (e) {
-        console.warn('Transceiver error:', e);
-      }
+      pc.addTransceiver('audio', { direction: 'recvonly' });
+      pc.addTransceiver('video', { direction: 'recvonly' });
     }
 
-    // ICE Candidate handler
+    // ICE Candidate generation
     pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        this.socket?.emit('signal-ice-candidate', {
+      if (event.candidate && this.socket) {
+        this.socket.emit('signal-ice-candidate', {
           toSocketId: remoteSocketId,
           candidate: event.candidate,
         });
       }
     };
 
-    // Remote Track handler
+    // Receive Remote Track
     pc.ontrack = (event) => {
-      const [remoteStream] = event.streams;
-      if (remoteStream) {
-        this.callbacks.onRemoteStream(remoteSocketId, remoteStream);
-      } else if (event.track) {
-        const newStream = new MediaStream([event.track]);
-        this.callbacks.onRemoteStream(remoteSocketId, newStream);
+      if (event.streams && event.streams[0]) {
+        this.callbacks.onRemoteStream(remoteSocketId, event.streams[0]);
       }
     };
 
-    // Negotiation needed for initiator
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed') {
+        pc.restartIce();
+      }
+    };
+
+    // Initiator creates and sends offer
     if (isInitiator) {
       try {
         const offer = await pc.createOffer();
@@ -402,13 +379,13 @@ export class WebRTCManager {
     return pc;
   }
 
-  private closePeerConnection(socketId: string) {
-    const pc = this.peerConnections.get(socketId);
+  private closePeerConnection(remoteSocketId: string) {
+    const pc = this.peerConnections.get(remoteSocketId);
     if (pc) {
       pc.close();
-      this.peerConnections.delete(socketId);
+      this.peerConnections.delete(remoteSocketId);
     }
-    this.iceCandidatesQueue.delete(socketId);
+    this.iceCandidatesQueue.delete(remoteSocketId);
   }
 
   public getSocketId(): string {
@@ -416,15 +393,16 @@ export class WebRTCManager {
   }
 
   public disconnect() {
-    this.lastJoinParams = null;
     for (const [, pc] of this.peerConnections) {
       pc.close();
     }
     this.peerConnections.clear();
     this.iceCandidatesQueue.clear();
+
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
     }
+    this.lastJoinParams = null;
   }
 }

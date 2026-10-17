@@ -31,7 +31,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
             </div>
             <div>
               <h3 className="text-sm font-bold text-white">Preferences & Hardware</h3>
-              <p className="text-[11px] text-slate-400">Audio, video, speech-to-text, and conference controls</p>
+              <p className="text-[11px] text-slate-400">Audio, video, hardware, and conference controls</p>
             </div>
           </div>
           <button

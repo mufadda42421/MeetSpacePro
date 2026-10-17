@@ -9,9 +9,9 @@ import {
   Check,
   ArrowLeft,
   Settings,
-  Sparkles,
   ShieldCheck,
   AlertCircle,
+  User,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useMeeting } from '../contexts/MeetingContext';
@@ -31,41 +31,37 @@ export const PreJoinScreen: React.FC = () => {
     devices,
     selectedAudioInput,
     selectedVideoInput,
-    selectedAudioOutput,
     setSelectedAudioInput,
     setSelectedVideoInput,
-    setSelectedAudioOutput,
     testAudioOutput,
     errorMessage,
     clearErrorMessage,
   } = useMeeting();
 
-  const [displayName, setDisplayName] = useState<string>(
-    userName || ''
-  );
+  const [displayName, setDisplayName] = useState<string>(userName || '');
   const [rememberMe, setRememberMe] = useState<boolean>(storedRememberMe ?? true);
   const [isJoining, setIsJoining] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
   const [showDeviceSettings, setShowDeviceSettings] = useState<boolean>(false);
   const [audioLevel, setAudioLevel] = useState<number>(0);
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animFrameRef = useRef<number | null>(null);
+
+  // Sync saved name if context updates
   useEffect(() => {
     if (userName && !displayName) {
       setDisplayName(userName);
     }
   }, [userName]);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const animFrameRef = useRef<number | null>(null);
-
-  // Attach local stream to preview video element
+  // Connect local video stream to preview tile
   useEffect(() => {
-    if (videoRef.current && localStream) {
+    if (videoRef.current && localStream && videoEnabled) {
       videoRef.current.srcObject = localStream;
     }
-  }, [localStream]);
+  }, [localStream, videoEnabled]);
 
   // Audio level meter visualization
   useEffect(() => {
@@ -74,18 +70,18 @@ export const PreJoinScreen: React.FC = () => {
       return;
     }
 
-    const audioTracks = localStream.getAudioTracks();
-    if (!audioTracks.length) return;
-
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const analyser = audioCtx.createAnalyser();
-      analyser.fftSize = 64;
-      const source = audioCtx.createMediaStreamSource(localStream);
-      source.connect(analyser);
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new AudioCtx();
+      audioContextRef.current = ctx;
 
-      audioContextRef.current = audioCtx;
-      analyserRef.current = analyser;
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (!audioTrack) return;
+
+      const source = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 64;
+      source.connect(analyser);
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount);
       const updateMeter = () => {
@@ -158,9 +154,9 @@ export const PreJoinScreen: React.FC = () => {
               {audioEnabled ? (
                 <>
                   <Mic className="w-3.5 h-3.5 text-emerald-400" />
-                  <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden border border-white/5">
                     <div
-                      className="h-full bg-emerald-400 transition-all duration-75"
+                      className="h-full bg-emerald-500 rounded-full transition-all duration-75"
                       style={{ width: `${audioLevel}%` }}
                     />
                   </div>
@@ -168,13 +164,13 @@ export const PreJoinScreen: React.FC = () => {
               ) : (
                 <>
                   <MicOff className="w-3.5 h-3.5 text-rose-400" />
-                  <span className="text-[11px] text-rose-300">Muted</span>
+                  <span className="text-rose-400 font-medium text-[11px]">Mic Muted</span>
                 </>
               )}
             </div>
 
-            {/* Quick in-preview device controls */}
-            <div className="absolute bottom-4 inset-x-0 flex items-center justify-center gap-3 z-10">
+            {/* Floating Device Controls */}
+            <div className="absolute bottom-4 inset-x-0 flex items-center justify-center gap-3">
               <button
                 type="button"
                 onClick={toggleAudio}
@@ -278,7 +274,7 @@ export const PreJoinScreen: React.FC = () => {
               {meetingDoc?.title || 'Ready to join?'}
             </h2>
             <div className="flex items-center gap-2 text-xs text-slate-400">
-              <span className="font-mono px-2 py-0.5 rounded bg-white/5 border border-white/10 text-indigo-300">
+              <span className="font-mono px-2 py-0.5 rounded bg-white/5 border border-white/10 text-indigo-300 font-semibold">
                 {meetingId}
               </span>
               <span>•</span>
@@ -305,7 +301,10 @@ export const PreJoinScreen: React.FC = () => {
           <form onSubmit={handleJoin} className="space-y-4">
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                <span>Your Name</span>
+                <span className="flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Your Name</span>
+                </span>
                 {userName && (
                   <span className="text-[10px] text-indigo-400 font-normal">
                     Saved from previous meeting
@@ -352,10 +351,10 @@ export const PreJoinScreen: React.FC = () => {
             </div>
           </form>
 
-          <div className="p-3 rounded-2xl bg-white/5 border border-white/5 space-y-1.5 text-xs text-slate-400">
+          <div className="p-3.5 rounded-2xl bg-white/5 border border-white/5 space-y-1.5 text-xs text-slate-400">
             <div className="flex items-center gap-2 text-slate-300 font-medium">
-              <Sparkles className="w-4 h-4 text-indigo-400" />
-              <span>Live Speech-to-Text & Screen Share</span>
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              <span>Direct Peer-to-Peer Video Call</span>
             </div>
             <p className="text-[11px] text-slate-500 leading-normal">
               No account required. Once you join, you will be connected directly with all other participants in room <strong className="text-slate-300">{meetingId}</strong>.

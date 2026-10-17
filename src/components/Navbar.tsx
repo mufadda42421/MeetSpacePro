@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Video, Calendar, Users, Settings, Sparkles, User as UserIcon, Check } from 'lucide-react';
+import { Video, Calendar, Users, Settings, ShieldCheck, Check } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface NavbarProps {
@@ -67,9 +67,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSchedule, onOpenContacts, 
           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
           <span>{currentTime}</span>
         </div>
-        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-          <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-          <span>Gemini AI Transcription</span>
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/20">
+          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+          <span>Encrypted WebRTC</span>
         </div>
       </div>
 
@@ -77,7 +77,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSchedule, onOpenContacts, 
       <div className="flex items-center gap-2">
         <button
           onClick={onOpenSchedule}
-          className="hidden sm:flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+          className="hidden sm:flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
           title="Schedule a meeting"
         >
           <Calendar className="w-4 h-4 text-slate-400" />
@@ -86,7 +86,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSchedule, onOpenContacts, 
 
         <button
           onClick={onOpenContacts}
-          className="hidden sm:flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+          className="hidden sm:flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-300 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
           title="My contacts"
         >
           <Users className="w-4 h-4 text-slate-400" />
@@ -95,7 +95,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSchedule, onOpenContacts, 
 
         <button
           onClick={onOpenSettings}
-          className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+          className="p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
           title="App settings"
         >
           <Settings className="w-4 h-4" />
@@ -114,7 +114,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSchedule, onOpenContacts, 
             />
             <button
               type="submit"
-              className="p-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors"
+              className="p-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors cursor-pointer"
             >
               <Check className="w-3.5 h-3.5" />
             </button>
@@ -122,7 +122,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onOpenSchedule, onOpenContacts, 
         ) : (
           <button
             onClick={() => setIsEditingName(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/10 text-xs text-slate-200"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/10 text-xs text-slate-200 cursor-pointer"
             title="Click to edit your display name"
           >
             <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-bold flex items-center justify-center text-[11px]">

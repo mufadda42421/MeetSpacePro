@@ -52,7 +52,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       theme: 'dark',
       mirrorVideo: true,
       noiseSuppression: true,
-      captionsEnabled: false,
       updatedAt: new Date().toISOString(),
     };
   });
